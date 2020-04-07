@@ -9,7 +9,8 @@ from tqdm import tqdm
 from joblib import Parallel, delayed
 from numba import jit
 import operator
-
+import lmfit
+from lmfit import Parameters
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
@@ -178,46 +179,109 @@ def radial_temperature_average_disk_sample(x0, y0, N_Rmax, pr, path, rec_name, o
     return df_temperature  # note the column i of the df_temperature indicate the temperature in pixel i
 
 
-def amp_phase_one_pair(index, df_temperature, f_heating, gap):
+def sin_func(t, amplitude, phase, bias, f_heating):
+    return amplitude * np.sin(2 * np.pi * f_heating * t + phase) + bias
+
+def sine_residual(params, x, data):
+    amplitude = params['amplitude']
+    phase = params['phase']
+    bias = params['bias']
+    freq = params['frequency']
+
+    model = amplitude * np.sin(2 * np.pi * freq * x + phase) + bias
+
+    return abs((data - model)/data) # before this is only data-model, this can't be right for certain situations
+
+
+def amp_phase_one_pair(index, df_temperature, f_heating, gap, frequency_analysis_method):
     n_col = df_temperature.shape[1]
     tmin = min(df_temperature['reltime'])
     time = df_temperature['reltime'] - tmin
 
-    A1 = df_temperature[index[0]]
-    A2 = df_temperature[index[1]]
+    if frequency_analysis_method == 'fft':
 
-    fft_X1 = np.fft.fft(A1)
-    fft_X2 = np.fft.fft(A2)
+        A1 = df_temperature[index[0]]
+        A2 = df_temperature[index[1]]
 
-    T_total = np.max(time) - np.min(time)
-    df = 1 / T_total
+        fft_X1 = np.fft.fft(A1)
+        fft_X2 = np.fft.fft(A2)
 
-    N_0 = int(f_heating / df)
+        T_total = np.max(time) - np.min(time)
+        df = 1 / T_total
 
-    magnitude_X1 = np.abs(fft_X1)
-    magnitude_X2 = np.abs(fft_X2)
+        N_0 = int(f_heating / df)
 
-    phase_X1 = np.angle(fft_X1)
-    phase_X2 = np.angle(fft_X2)
+        magnitude_X1 = np.abs(fft_X1)
+        magnitude_X2 = np.abs(fft_X2)
 
-    N_f = 2
-    N1, Amp1 = max(enumerate(magnitude_X1[N_0 - N_f:N_0 + N_f]), key=operator.itemgetter(1))
-    N2, Amp2 = max(enumerate(magnitude_X2[N_0 - N_f:N_0 + N_f]), key=operator.itemgetter(1))
+        phase_X1 = np.angle(fft_X1)
+        phase_X2 = np.angle(fft_X2)
 
-    Nf = N_0 + N1 - N_f
-    amp_ratio = magnitude_X2[Nf] / magnitude_X1[Nf]
-    phase_diff = abs(phase_X1[Nf] - phase_X2[Nf])
+        N_f = 2
+        N1, Amp1 = max(enumerate(magnitude_X1[N_0 - N_f:N_0 + N_f]), key=operator.itemgetter(1))
+        N2, Amp2 = max(enumerate(magnitude_X2[N_0 - N_f:N_0 + N_f]), key=operator.itemgetter(1))
 
-    phase_diff = phase_diff % np.pi
-    if phase_diff > np.pi / 2:
-        phase_diff = np.pi - phase_diff
+        Nf = N_0 + N1 - N_f
+        amp_ratio = magnitude_X2[Nf] / magnitude_X1[Nf]
+        phase_diff = abs(phase_X1[Nf] - phase_X2[Nf])
 
-    L = abs(index[0] - index[1]) * gap
+        phase_diff = phase_diff % np.pi
+        if phase_diff > np.pi / 2:
+            phase_diff = np.pi - phase_diff
 
-    return L, phase_diff, amp_ratio  # note L is in the unit of pixel
+        L = abs(index[0] - index[1]) * gap
+
+    elif frequency_analysis_method == 'sine':
+
+        fitting_params_initial = {'amplitude': 10, 'phase': 0.1, 'bias': 10}
+
+        n_col = df_temperature.shape[1]
+        tmin = min(df_temperature['reltime'])
+        time = df_temperature['reltime'] - tmin
+
+        A1 = df_temperature[index[0]]
+        A2 = df_temperature[index[1]]
+
+        x0 = np.array([10, 0.1, 10])  # amplitude,phase,bias
+
+        params1 = Parameters()
+        params1.add('amplitude', value=fitting_params_initial['amplitude'])
+        params1.add('phase', value=fitting_params_initial['phase'])
+        params1.add('bias', value=fitting_params_initial['bias'])
+        params1.add('frequency', value=f_heating, vary=False)
+
+        res1 = lmfit.minimize(sine_residual, params1, args=(time, A1))
+
+        params2 = Parameters()
+        params2.add('amplitude', value=fitting_params_initial['amplitude'])
+        params2.add('phase', value=fitting_params_initial['phase'])
+        params2.add('bias', value=fitting_params_initial['bias'])
+        params2.add('frequency', value=f_heating, vary=False)
+        res2 = lmfit.minimize(sine_residual, params2, args=(time, A2))
+
+        amp1 = np.abs(res1.params['amplitude'].value)
+        amp2 = np.abs(res2.params['amplitude'].value)
+
+        p1 = res1.params['phase'].value
+        p2 = res2.params['phase'].value
+
+        amp_ratio = min(np.abs(amp1 / amp2), np.abs(amp2 / amp1))
+
+        phase_diff = np.abs(p1 - p2)
+        phase_diff = phase_diff % np.pi
+        if phase_diff > np.pi / 2:
+            phase_diff = np.pi - phase_diff
+
+        T_total = np.max(time) - np.min(time)
+
+        df = 1 / T_total
+
+        L = abs(index[0] - index[1]) * gap  # here does not consider the offset between the heater and the region of analysis
+
+    return L, phase_diff, amp_ratio
 
 
-def fit_amp_phase_one_batch(df_temperature, f_heating, R0, gap):
+def fit_amp_phase_one_batch(df_temperature, f_heating, R0, gap,frequency_analysis_method):
     N_lines = df_temperature.shape[1] - 1
     r_list = np.zeros(N_lines - 1)
     phase_diff_list = np.zeros(N_lines - 1)
@@ -231,14 +295,14 @@ def fit_amp_phase_one_batch(df_temperature, f_heating, R0, gap):
         if i > 0:
             index = [0, i]
             r_list[i - 1], phase_diff_list[i - 1], amp_ratio_list[i - 1] = amp_phase_one_pair(index, df_temperature,
-                                                                                              f_heating, gap)
+                                                                                              f_heating, gap,frequency_analysis_method)
             r_list[i - 1] = r_list[i - 1] + R_ring_inner_edge
             r_ref_list[i - 1] = R_ring_inner_edge
 
     return r_list, r_ref_list, phase_diff_list, amp_ratio_list
 
 
-def batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis):
+def batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,frequency_analysis_method):
     # N_line_groups = gap - 1
     N_line_groups = gap
     N_line_each_group = int(R_analysis / gap) - 1  # Don't have to analyze entire Rmax pixels
@@ -258,7 +322,7 @@ def batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysi
     for j in range(N_line_groups):
         df = pd.DataFrame(T_group[j, :, :].T)
         df['reltime'] = df_temperature['reltime']
-        r_list, r_ref_list, phase_diff_list, amp_ratio_list = fit_amp_phase_one_batch(df, f_heating, R0 + j, gap)
+        r_list, r_ref_list, phase_diff_list, amp_ratio_list = fit_amp_phase_one_batch(df, f_heating, R0 + j, gap,frequency_analysis_method)
         # print(df.shape[1]-1)
 
         r_list_all = r_list_all + list(r_list)
@@ -344,6 +408,8 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
     T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
 
+    frequency_analysis_method = numerical_simulation_setting['frequency_analysis_method']
+
     emissivity = sample_information['emissivity']  # assumed to be constant
     absorptivity = sample_information['absorptivity']  # assumed to be constant
     sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
@@ -372,36 +438,39 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
         q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
                                                    solar_simulator_settings, light_source_property)
+        T_temp = np.zeros(Nr)
+        N_steady_count = 0
+        time_index = Nt - 1
+        N_one_cycle = int(Nt/N_cycle)
+        #A_initial = 100
 
         for p in range(Nt - 1):  # p indicate time step
 
             cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
-            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - 2 * sigma_sb * emissivity * dt / (
-                        rho * cp * dz) * T[p, 0] ** 4 \
-                          + dt / (rho * cp * dz) * (
-                                      absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *
-                                      q_solar[p, 0])
+            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - 2 * sigma_sb * emissivity * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
+                          dt / (rho * cp * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *q_solar[p, 0])
 
-            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (
-                        rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
-                             + dt / (rho * (
-                        cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (
-                                         absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity * q_solar[
-                                                                                                                                        p,
-                                                                                                                                        1:-1] - 2 * emissivity * sigma_sb * T[
-                                                                                                                                                                            p,
-                                                                                                                                                                            1:-1] ** 4)
+            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
+                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 \
+                             + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity * q_solar[p,1:-1] - 2 * emissivity * sigma_sb * T[p,1:-1] ** 4)
 
             cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
-            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) - 2 * dt * emissivity * sigma_sb / (rho * cp) * (1 / dz + 1 / dr) * \
-                           T[p, -1] ** 4 + 2 * Fo_r * T[p, -2] \
-                           + dt / (rho * cp * dz) * (
-                                       absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *
-                                       q_solar[p, -1]) \
+            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) - 2 * dt * emissivity * sigma_sb / (rho * cp) * (1 / dz + 1 / dr) * T[p, -1] ** 4 + 2 * Fo_r * T[p, -2] + \
+                           dt / (rho * cp * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *q_solar[p, -1]) \
                            + 2 * dt / (rho * cp * dr) * absorptivity * sigma_sb * T_sur2 ** 4
 
+            if (p>0) & (p % N_one_cycle ==0) & (frequency_analysis_method == 'sine'):
+                A_max = np.max(T[p-N_one_cycle:p,:],axis = 0)
+                A_min = np.min(T[p-N_one_cycle:p,:],axis = 0)
+                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<5e-2:
+                    N_steady_count += 1
+                    if N_steady_count == 2: # only need 2 periods to calculate amplitude and phase
+                        time_index = p
+                        break
+                T_temp = T[p, :]
     else:
         q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
+        time_index = Nt - 1
 
         for i in range(N_Rs):  # truncated solar light
             for j in range(Nt):
@@ -448,28 +517,20 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
     print('alpha_r = {}, N_cycle = {}, dt = {}, Nr = {}, Nt = {}, Fo_r = {}'.format(alpha_r,N_cycle, dt, Nr, Nt,Fo_r))
 
-    return T, time_simulation, r
+    return T[:time_index], time_simulation[:time_index], r,N_one_cycle
 
 
 def simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property, numerical_simulation_setting):
-    T_, time_T_, r_ = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
+    T_, time_T_, r_,N_one_cycle = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                                          light_source_property, numerical_simulation_setting)
 
     f_heating = solar_simulator_settings['f_heating']
-    gap = solar_simulator_settings['gap']
+    gap = numerical_simulation_setting['gap']
 
-    df_temperature_simulation = pd.DataFrame(
-        data=T_)  # return a dataframe containing radial averaged temperature and relative time
-    df_temperature_simulation['reltime'] = time_T_
-
-    N_steady = int(len(df_temperature_simulation) / 3)
-    df_temperature_simulation = df_temperature_simulation.iloc[N_steady:, :]  # now we only use steady part
-
-    df_temperature_simulation = pd.DataFrame(
-        data=T_)  # return a dataframe containing radial averaged temperature and relative time
-    df_temperature_simulation['reltime'] = time_T_
+    df_temperature_simulation = pd.DataFrame(data=T_[-2*N_one_cycle:,:])  # return a dataframe containing radial averaged temperature and relative time
+    df_temperature_simulation['reltime'] = time_T_[-2*N_one_cycle:]
 
     phase_diff_simulation = []
     amplitude_ratio_simulation = []
@@ -477,7 +538,7 @@ def simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
     for i in range(len(df_amplitude_phase_measurement)):
         L, phase_diff, amp_ratio = amp_phase_one_pair(
             [df_amplitude_phase_measurement.iloc[i, :]['r_ref'], df_amplitude_phase_measurement.iloc[i, :]['r']],
-            df_temperature_simulation, f_heating, gap)
+            df_temperature_simulation, f_heating, gap,numerical_simulation_setting['frequency_analysis_method'])
         amplitude_ratio_simulation.append(amp_ratio)
         phase_diff_simulation.append(phase_diff)
 
@@ -487,14 +548,14 @@ def simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
     df_amp_phase_simulated['r'] = df_amplitude_phase_measurement['r']
     df_amp_phase_simulated['r_ref'] = df_amplitude_phase_measurement['r_ref']
 
-    return df_amp_phase_simulated
+    return df_amp_phase_simulated,df_temperature_simulation
 
 
 def residual(params, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
              solar_simulator_settings, light_source_property, numerical_simulation_setting):
     sample_information['alpha_r'] = params[0]
 
-    df_amp_phase_simulated = simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
+    df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
                                                                           sample_information, vacuum_chamber_setting,
                                                                           solar_simulator_settings,
                                                                           light_source_property,
@@ -506,3 +567,79 @@ def residual(params, df_amplitude_phase_measurement, sample_information, vacuum_
                                 zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
 
     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
+
+
+def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase_measurement, sample_information,
+                            vacuum_chamber_setting, solar_simulator_settings, light_source_property,
+                            numerical_simulation_setting):
+    sample_information['alpha_r'] = alpha_r_optimized
+    df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(
+        df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
+        light_source_property, numerical_simulation_setting)
+    plt.figure(figsize=(15, 5))
+    # plt.scatter(df_result_IR_mosfata['r'],df_result_IR_mosfata['amp_ratio'],facecolors='none',edgecolors='k',label = 'Mostafa')
+    plt.subplot(131)
+    plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
+                edgecolors='r', label='Yuan')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+', label='Yuan')
+
+    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
+    plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
+
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+    # plt.legend()
+
+    plt.subplot(132)
+    plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['phase_diff'], facecolors='none',
+                edgecolors='r', label='Yuan')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+', label='Yuan')
+
+    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
+    plt.ylabel('Phase difference (rad)', fontsize=14, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+    plt.subplot(133)
+
+    df_temperature_ = df_temperature.query('reltime>'+str(min(df_temperature_simulation['reltime']))+' and reltime< '+str(max(df_temperature_simulation['reltime'])))
+
+    N_actual_data_per_period = int(len(df_temperature) / (max(df_temperature['reltime']) / (1 / solar_simulator_settings['f_heating'])))
+
+    N_skip = int(N_actual_data_per_period/20) #only shows 20 data points per cycle maximum
+
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[40], label='simulated R = 40 pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[40][::N_skip], label='measured R = 40 pixel, skip '+str(N_skip))
+
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[80], label='simulated R = 80 pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[80][::N_skip], label='measured R = 80 pixel, skip '+str(N_skip))
+
+    plt.xlabel('Time (s)', fontsize=14, fontweight='bold')
+    plt.ylabel('Temperature (K)', fontsize=14, fontweight='bold')
+
+
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+    plt.tight_layout()
+    plt.show()
+
+    print('Temperature range for the parameter estimation is between' + str(np.mean(df_temperature_[80]))+' K and '+str(np.mean(df_temperature_[40]))+' K.')
