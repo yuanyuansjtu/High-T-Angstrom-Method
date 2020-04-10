@@ -40,8 +40,7 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
             T21 = df_temp.iloc[y2, x1]  # Identifying the corresponding temperatures for the y-coordinates
             T12 = df_temp.iloc[y1, x2];
             T22 = df_temp.iloc[y2, x2]  # Identifying the corresponding temperatures for the x-coordinates
-            Tr[
-                i, j] = dx1 * dy1 * T11 + dx1 * dy2 * T21 + dx2 * dy1 * T12 + dx2 * dy2 * T22 + 273.15  # Interpolated angular temperature matrix
+            Tr[i, j] = dx1 * dy1 * T11 + dx1 * dy2 * T21 + dx2 * dy1 * T12 + dx2 * dy2 * T22 + 273.15  # Interpolated angular temperature matrix
 
     T_interpolate = np.mean(Tr, axis=1)
 
@@ -580,8 +579,8 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
     # plt.scatter(df_result_IR_mosfata['r'],df_result_IR_mosfata['amp_ratio'],facecolors='none',edgecolors='k',label = 'Mostafa')
     plt.subplot(131)
     plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
-                edgecolors='r', label='Yuan')
-    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+', label='Yuan')
+                edgecolors='r', label='measurement results')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+', label='regression results')
 
     plt.xlabel('R (m)', fontsize=14, fontweight='bold')
     plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
@@ -598,8 +597,8 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
 
     plt.subplot(132)
     plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['phase_diff'], facecolors='none',
-                edgecolors='r', label='Yuan')
-    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+', label='Yuan')
+                edgecolors='r', label='measurement results')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+', label='regression results')
 
     plt.xlabel('R (m)', fontsize=14, fontweight='bold')
     plt.ylabel('Phase difference (rad)', fontsize=14, fontweight='bold')
@@ -620,11 +619,13 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
 
     N_skip = int(N_actual_data_per_period/20) #only shows 20 data points per cycle maximum
 
-    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[40], label='simulated R = 40 pixel')
-    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[40][::N_skip], label='measured R = 40 pixel, skip '+str(N_skip))
+    N_inner = int(df_amplitude_phase_measurement['r'].min())
+    N_outer = int(df_amplitude_phase_measurement['r'].max())
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_inner], label='simulated R = '+str(N_inner)+' pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_inner][::N_skip], label='measured R = '+str(N_inner)+' pixel, skip '+str(N_skip))
 
-    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[80], label='simulated R = 80 pixel')
-    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[80][::N_skip], label='measured R = 80 pixel, skip '+str(N_skip))
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_outer], label='simulated R = '+str(N_outer)+' pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_outer][::N_skip], label='measured R = '+str(N_outer)+' pixel, skip '+str(N_skip))
 
     plt.xlabel('Time (s)', fontsize=14, fontweight='bold')
     plt.ylabel('Temperature (K)', fontsize=14, fontweight='bold')
@@ -640,6 +641,16 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
     plt.legend(prop={'weight': 'bold', 'size': 12})
 
     plt.tight_layout()
+
+    rec_name = solar_simulator_settings['rec_name']
+    f_heating = solar_simulator_settings['f_heating']
+    plt.title(rec_name+', f_heating = '+str(f_heating)+' Hz')
     plt.show()
 
-    print('Temperature range for the parameter estimation is between' + str(np.mean(df_temperature_[80]))+' K and '+str(np.mean(df_temperature_[40]))+' K.')
+    R = sample_information['R']
+    Nr = numerical_simulation_setting['Nr']
+    dr = R/Nr
+
+    T_average = np.sum([2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
+
+    print('Temperature range for the parameter estimation is between {:.1f} and {:.1f} K. The mean temperature of the sample is {:.1f} K'.format(np.mean(df_temperature_[N_outer]),np.mean(df_temperature_[N_inner]),T_average))
