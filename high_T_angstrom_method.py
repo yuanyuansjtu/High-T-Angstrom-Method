@@ -7,10 +7,15 @@ import os
 import pickle
 from tqdm import tqdm
 from joblib import Parallel, delayed
-from numba import jit
+
 import operator
 import lmfit
 from lmfit import Parameters
+
+from SALib.sample import saltelli
+from SALib.analyze import sobol
+from SALib.test_functions import Ishigami
+
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
@@ -381,6 +386,7 @@ def light_source_intensity_vecterize(r_array, t_array, N_Rs, solar_simulator_set
 
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting):
+
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
     t_z = sample_information['t_z']
@@ -424,10 +430,10 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
     Fo_r = alpha_r * dt / dr ** 2
 
-    Rs = vacuum_chamber_setting['Rs']  # the location where the solar light shines on the sample
-    R0 = vacuum_chamber_setting['R0']  # the location of reference ring
+    # Rs = vacuum_chamber_setting['Rs']  # the location where the solar light shines on the sample
+    # N_Rs = int(Rs / R * Nr)
 
-    N_Rs = int(Rs / R * Nr)
+    N_Rs = int(vacuum_chamber_setting['N_Rs']) # max pixels that solar light shine upon
 
     T = T_initial * np.ones((Nt, Nr))
 
@@ -514,7 +520,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
 
-    print('alpha_r = {}, N_cycle = {}, dt = {}, Nr = {}, Nt = {}, Fo_r = {}'.format(alpha_r,N_cycle, dt, Nr, Nt,Fo_r))
+    print('alpha_r = {}, f_heating = {}, dt = {}, Nr = {}, Nt = {}, Fo_r = {}'.format(alpha_r,f_heating, dt, Nr, Nt,Fo_r))
 
     return T[:time_index], time_simulation[:time_index], r,N_one_cycle
 
@@ -654,3 +660,105 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
     T_average = np.sum([2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
 
     print('Temperature range for the parameter estimation is between {:.1f} and {:.1f} K. The mean temperature of the sample is {:.1f} K'.format(np.mean(df_temperature_[N_outer]),np.mean(df_temperature_[N_inner]),T_average))
+
+
+def sensitivity_model_output(f_heating, X_input_array, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+                             solar_simulator_settings, light_source_property):
+    # X_input array is 2D array produced by python salib
+    # X_2eN5 =saltelli.sample(f_2eN5_problem,500,calc_second_order=False, seed=42)
+    # df_r_ref_locations just indicate how to calculate amplitude and phase, where is reference line
+
+    alpha_r = X_input_array[0]
+    emissivity = X_input_array[3]
+    absorptivity = emissivity
+    N_Rs = X_input_array[5]
+    T_sur1 = X_input_array[4]
+    Amax = X_input_array[1]
+    sigma_s = X_input_array[2]
+
+    solar_simulator_settings['f_heating'] = f_heating
+    sample_information['alpha_r'] = alpha_r
+    sample_information['emissivity'] = emissivity
+    sample_information['absorptivity'] = absorptivity
+    vacuum_chamber_setting['N_Rs'] = N_Rs
+    vacuum_chamber_setting['T_sur1'] = T_sur1
+    light_source_property['Amax'] = Amax
+    light_source_property['sigma_s'] = sigma_s
+
+    df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_r_ref_locations,
+                                                                                                     sample_information,
+                                                                                                     vacuum_chamber_setting,
+                                                                                                     solar_simulator_settings,
+                                                                                                     light_source_property,
+                                                                                                     numerical_simulation_setting)
+
+    df_amp_phase_simulated['f_heating'] = np.array([f_heating for i in range(len(df_amp_phase_simulated))])
+
+    df_amp_phase_simulated['alpha'] = np.array([alpha_r for i in range(len(df_amp_phase_simulated))])
+
+    return df_amp_phase_simulated
+
+
+def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+                             solar_simulator_settings, light_source_property):
+    s_time = time.time()
+    X_input_arrays = pickle.load(open(X_dump_file_name, 'rb')) # obtain pre-defined simulation conditions
+
+    joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
+        delayed(sensitivity_model_output)(f_heating, X_input_array, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+                             solar_simulator_settings, light_source_property) for X_input_array in tqdm(X_input_arrays) for f_heating
+        in f_heating_list)
+
+    pickle.dump(joblib_output, open("sensitivity_results_" + X_dump_file_name, "wb"))
+    e_time = time.time()
+    print(e_time - s_time)
+
+
+def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating):
+    amp_ratio_results = np.array([np.array(parallel_result['amp_ratio']) for parallel_result in parallel_results])
+    phase_diff_results = np.array([np.array(parallel_result['phase_diff']) for parallel_result in parallel_results])
+
+    Si_amp_radius = np.array(
+        [sobol.analyze(sobol_problem, amp_ratio_results[:, i], calc_second_order=False, print_to_console=False)['S1']
+         for i in range(amp_ratio_results.shape[1])])
+    # Just pay close attention that calc_second_order=False must be consistent with how X is defined!
+
+    Si_phase_radius = np.array(
+        [sobol.analyze(sobol_problem, phase_diff_results[:, i], calc_second_order=False, print_to_console=False)['S1']
+         for i in range(phase_diff_results.shape[1])])
+
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(121)
+    for i, name in enumerate(sobol_problem['names']):
+        plt.plot(Si_amp_radius[:, i], label=name)
+
+    plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
+    plt.ylabel('Amp Ratio Sensitivity', fontsize=14, fontweight='bold')
+
+    plt.suptitle('frequency = ' + str(f_heating) + ' Hz', fontsize=14, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+    plt.subplot(122)
+    for i, name in enumerate(sobol_problem['names']):
+        plt.plot(Si_phase_radius[:, i], label=name)
+
+    plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
+    plt.ylabel('Phase diff Sensitivity', fontsize=14, fontweight='bold')
+
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+    plt.show()
