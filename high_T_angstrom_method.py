@@ -201,6 +201,7 @@ def amp_phase_one_pair(index, df_temperature, f_heating, gap, frequency_analysis
     n_col = df_temperature.shape[1]
     tmin = min(df_temperature['reltime'])
     time = df_temperature['reltime'] - tmin
+    dt = max(time)/len(time)
 
     if frequency_analysis_method == 'fft':
 
@@ -282,8 +283,38 @@ def amp_phase_one_pair(index, df_temperature, f_heating, gap, frequency_analysis
 
         L = abs(index[0] - index[1]) * gap  # here does not consider the offset between the heater and the region of analysis
 
+
+    elif frequency_analysis_method == 'max_min':
+
+        A1 = np.array(df_temperature[index[0]])
+        A2 = np.array(df_temperature[index[1]])
+
+        amp1,phase1 = find_amplitude_phase_min_max(A1,f_heating,dt)
+        amp2, phase2 = find_amplitude_phase_min_max(A2, f_heating,dt)
+
+        amp_ratio = amp2/amp1
+
+        phase_diff = np.abs(phase1 - phase2)
+
+        phase_diff = phase_diff % np.pi
+        if phase_diff > np.pi / 2:
+            phase_diff = np.pi - phase_diff
+
+        L = abs(index[0] - index[1]) * gap
+
     return L, phase_diff, amp_ratio
 
+def find_amplitude_phase_min_max(a,f_heating,dt):
+
+    find_max = ((a[1:-1] - a[0:-2]) > 0) & ((a[1:-1] - a[2:]) > 0)
+    find_min = ((a[1:-1] - a[0:-2]) < 0) & ((a[1:-1] - a[2:]) < 0)
+    max_index = np.where(find_max == 1)
+    min_index = np.where(find_min == 1)
+    amp = a[max_index].mean() - a[min_index].mean()
+    #phase_index = min_index[0][0]
+    phase = min_index[0][0] * 2 * np.pi * f_heating*dt
+
+    return amp, phase
 
 def fit_amp_phase_one_batch(df_temperature, f_heating, R0, gap,frequency_analysis_method):
     N_lines = df_temperature.shape[1] - 1
@@ -464,10 +495,10 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                            dt / (rho * cp * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *q_solar[p, -1]) \
                            + 2 * dt / (rho * cp * dr) * absorptivity * sigma_sb * T_sur2 ** 4
 
-            if (p>0) & (p % N_one_cycle ==0) & (frequency_analysis_method == 'sine'):
+            if (p>0) & (p % N_one_cycle ==0) & (frequency_analysis_method != 'fft'):
                 A_max = np.max(T[p-N_one_cycle:p,:],axis = 0)
                 A_min = np.min(T[p-N_one_cycle:p,:],axis = 0)
-                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<5e-2:
+                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<2e-2:
                     N_steady_count += 1
                     if N_steady_count == 2: # only need 2 periods to calculate amplitude and phase
                         time_index = p
@@ -528,14 +559,19 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 def simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property, numerical_simulation_setting):
+    #s_time = time.time()
     T_, time_T_, r_,N_one_cycle = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                                          light_source_property, numerical_simulation_setting)
+    #s1_time = time.time()
 
     f_heating = solar_simulator_settings['f_heating']
     gap = numerical_simulation_setting['gap']
 
-    df_temperature_simulation = pd.DataFrame(data=T_[-2*N_one_cycle:,:])  # return a dataframe containing radial averaged temperature and relative time
-    df_temperature_simulation['reltime'] = time_T_[-2*N_one_cycle:]
+    # I want max 200 samples per period
+    N_skip_time = int(N_one_cycle / 400)
+
+    df_temperature_simulation = pd.DataFrame(data=T_[-2*N_one_cycle::N_skip_time,:])  # return a dataframe containing radial averaged temperature and relative time
+    df_temperature_simulation['reltime'] = time_T_[-2*N_one_cycle::N_skip_time]
 
     phase_diff_simulation = []
     amplitude_ratio_simulation = []
@@ -547,12 +583,14 @@ def simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
         amplitude_ratio_simulation.append(amp_ratio)
         phase_diff_simulation.append(phase_diff)
 
+    #s2_time = time.time()
     df_amp_phase_simulated = pd.DataFrame(
         data={'amp_ratio': amplitude_ratio_simulation, 'phase_diff': phase_diff_simulation})
 
     df_amp_phase_simulated['r'] = df_amplitude_phase_measurement['r']
     df_amp_phase_simulated['r_ref'] = df_amplitude_phase_measurement['r_ref']
 
+    #print("Model evaluation time {:.2f}s and amplitude and phase processing time {:.2f}s".format(s1_time-s_time,s2_time-s1_time))
     return df_amp_phase_simulated,df_temperature_simulation
 
 
