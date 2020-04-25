@@ -800,3 +800,110 @@ def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating):
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
     plt.show()
+
+
+
+
+class MCMC_sampler:
+
+    def __init__(self, df_amplitude_phase_measurement,
+                 sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+                 solar_simulator_settings, light_source_property, prior_mu, prior_sigma,
+                 transition_sigma, result_name, N_sample):
+
+        self.sample_information = sample_information
+        self.vacuum_chamber_setting = vacuum_chamber_setting
+        self.numerical_simulation_setting = numerical_simulation_setting
+        self.solar_simulator_settings = solar_simulator_settings
+        self.light_source_property = light_source_property
+
+        self.prior_mu = prior_mu
+        self.prior_sigma = prior_sigma
+        self.transition_sigma = transition_sigma
+
+        self.result_name = result_name
+
+        self.df_amplitude_phase_measurement = df_amplitude_phase_measurement
+
+        self.N_sample = N_sample
+
+    def ln_prior(self, params):
+        p_ln_alpha = norm.pdf(params['ln_alpha'], loc=self.prior_mu['ln_alpha'],
+                              scale=self.prior_sigma['ln_alpha_sigma'])
+        # p_ln_h = norm.pdf(params['ln_h'], loc=self.prior_mu['ln_h'], scale=self.prior_sigma['ln_h'])
+        p_ln_sigma_dA = norm.pdf(params['ln_sigma_dA'], loc=self.prior_mu['ln_sigma_dA'],
+                                 scale=self.prior_sigma['ln_sigma_dA_sigma'])
+        p_ln_sigma_dP = norm.pdf(params['ln_sigma_dP'], loc=self.prior_mu['ln_sigma_dP'],
+                                 scale=self.prior_sigma['ln_sigma_dP_sigma'])
+        return np.log(p_ln_alpha) + np.log(p_ln_sigma_dA) + np.log(p_ln_sigma_dP)
+
+    def ln_transformation_jacobian(self, params):
+        jac_alpha = 1 / (np.exp(params['ln_alpha']))
+        jac_sigma_dA = 1 / (np.exp(params['ln_sigma_dA']))
+        jac_sigma_dP = 1 / (np.exp(params['ln_sigma_dP']))
+        jac_rho = (1 + np.exp(2 * params['z'])) / (4 * np.exp(2 * params['z']))
+        return np.log(jac_alpha) + np.log(jac_sigma_dA) + np.log(jac_sigma_dP) + np.log(jac_rho)
+
+    def ln_likelihood(self, params):
+        self.sample_information['alpha_r'] = np.exp(params['ln_alpha'])
+        df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(
+            self.df_amplitude_phase_measurement, self.sample_information, self.vacuum_chamber_setting,
+            self.solar_simulator_settings, self.light_source_property, self.numerical_simulation_setting)
+        mean_measured = np.array(
+            [self.df_amplitude_phase_measurement['amp_ratio'], self.df_amplitude_phase_measurement['phase_diff']])
+        mean_theoretical = np.array([df_amp_phase_simulated['amp_ratio'], df_amp_phase_simulated['phase_diff']])
+
+        sigma_dA = np.exp(params['ln_sigma_dA'])
+        sigma_dP = np.exp(params['ln_sigma_dP'])
+        rho_dA_dP = np.tanh(params['z'])
+
+        cov_errs = [[sigma_dA ** 2, sigma_dA * sigma_dP * rho_dA_dP], [sigma_dA * sigma_dP * rho_dA_dP, sigma_dP ** 2]]
+
+        return np.sum([np.log(multivariate_normal.pdf(mean_measured_, mean_theoretical_, cov_errs)) for
+                       (mean_measured_, mean_theoretical_) in zip(mean_measured.T, mean_theoretical.T)])
+
+    def rw_proposal(self, params):
+
+        ln_sigma_dA = params['ln_sigma_dA']
+        ln_sigma_dP = params['ln_sigma_dP']
+        ln_alpha = params['ln_alpha']
+        z = params['z']
+
+        ln_alpha, ln_sigma_dA, ln_sigma_dP, z = np.random.normal(
+            [ln_alpha, ln_sigma_dA, ln_sigma_dP, z], scale=self.transition_sigma)
+
+        params_star = {'ln_alpha': ln_alpha, 'ln_sigma_dA': ln_sigma_dA, 'ln_sigma_dP': ln_sigma_dP, 'z': z}
+        return params_star
+
+    def rw_metropolis(self):
+
+        n_accepted = 0
+        n_rejected = 0
+
+        params = self.prior_mu
+        accepted = []
+        posterior = np.exp(self.ln_likelihood(params) + self.ln_transformation_jacobian(params) + self.ln_prior(params))
+
+        while (n_accepted < self.N_sample):
+            params_star = self.rw_proposal(params)
+            posterior_star = np.exp(
+                self.ln_likelihood(params_star) + self.ln_transformation_jacobian(params_star) + self.ln_prior(
+                    params_star))
+
+            accept_ratio = min(1, posterior_star / posterior)
+            u = np.random.rand()
+            if u <= accept_ratio:  # accept the new state
+                params = params_star
+                posterior = posterior_star
+                n_accepted += 1
+                accepted.append(params)
+
+                print('Accepted sample is {} and acceptance rate is {:.3f}.'.format(n_accepted, n_accepted / (
+                            n_accepted + n_rejected)))
+
+            else:  # reject the new state
+                n_rejected += 1
+
+        accepted = np.array(accepted)
+
+        return accepted
