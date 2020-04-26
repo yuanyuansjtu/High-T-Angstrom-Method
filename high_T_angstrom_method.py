@@ -16,6 +16,9 @@ from SALib.sample import saltelli
 from SALib.analyze import sobol
 from SALib.test_functions import Ishigami
 
+from scipy.stats import norm
+from scipy.stats import multivariate_normal
+
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
