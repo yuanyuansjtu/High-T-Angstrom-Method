@@ -20,15 +20,23 @@ from scipy.stats import norm
 from scipy.stats import multivariate_normal
 
 
-def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
+def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
     df_raw = pd.read_csv(file_name, sep=',', header=None, names=list(np.arange(0, 639)))
     raw_time_string = df_raw.iloc[2, 0][df_raw.iloc[2, 0].find('=') + 2:]  # '073:02:19:35.160000'
     raw_time_string = raw_time_string[raw_time_string.find(":") + 1:]  # '02:19:35.160000'
     strip_time = datetime.strptime(raw_time_string, '%H:%M:%S.%f')
     time_in_seconds = strip_time.hour * 3600 + strip_time.minute * 60 + strip_time.second + strip_time.microsecond / 10 ** 6
-    theta = np.linspace(0, 2 * np.pi, theta_n)  # The angles 1D array (rad)
+
+    theta_min = theta_range[0]
+    theta_max = theta_range[1]
+
+    theta_n = int(abs(theta_max-theta_min)/(2*np.pi)*120) # previous studies have shown that 2Pi requires above 100 theta points to yield accurate results
+
+    theta = np.linspace(theta_min, theta_max, theta_n)  # The angles 1D array (rad)
     df_temp = df_raw.iloc[5:, :]
+
+    #theta_n
 
     Tr = np.zeros((Rmax, theta_n))  # Initializing the radial temperature matrix (T)
 
@@ -53,6 +61,36 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_n, file_name):
     T_interpolate = np.mean(Tr, axis=1)
 
     return T_interpolate, time_in_seconds
+
+
+# here we work on theta averaged temperature profiles
+
+def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
+                             R_analysis,
+                             exp_amp_phase_extraction_method):
+    # we basically break entire disk into 6 regions, with interval of pi/3
+    plt.figure(figsize=(9, 8))
+    colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta']
+    for j in range(6):
+        # note radial_temperature_average_disk_sample automatically checks if a dump file exist
+        df_temperature = radial_temperature_average_disk_sample(x0, y0, N_Rmax, [np.pi / 3 * j, np.pi / 3 * (j + 1)],
+                                                                pr, path, rec_name, output_name, method, num_cores)
+        df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
+                                                                        exp_amp_phase_extraction_method)
+
+        ax = plt.gca()
+        plt.scatter(df_amplitude_phase_measurement['r'],
+                    df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
+                    s=80, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+
+    plt.xlabel('R (m)', fontsize=14)
+    plt.ylabel('Amplitude Ratio', fontsize=14)
+
+    plt.legend()
+    plt.show()
+
+
+
 
 
 def select_data_points_radial_average_MA_match_model_grid(x0, y0, N_Rmax, pr, R_sample, theta_n,
@@ -132,12 +170,12 @@ def select_data_points_radial_average_HY(x0, y0, Rmax, file_name):
     return T_interpolate, time_in_seconds
 
 
-def radial_temperature_average_disk_sample(x0, y0, N_Rmax, pr, path, rec_name, output_name, method,
+def radial_temperature_average_disk_sample(x0, y0, N_Rmax,theta_range, pr, path, rec_name, output_name, method,
                                            num_cores):  # unit in K
     # path= "C://Users//NTRG lab//Desktop//yuan//"
     # rec_name = "Rec-000011_e63", this is the folder which contains all csv data files
 
-    dump_file_path = output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}'.format(x0, y0, N_Rmax, method)
+    dump_file_path = output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method,int(180/np.pi*theta_range[0]),int(180/np.pi*theta_range[1]))
 
     if (os.path.isfile(dump_file_path)):  # First check if a dump file exist:
         print('Found previous dump file :' + dump_file_path)
@@ -152,7 +190,7 @@ def radial_temperature_average_disk_sample(x0, y0, N_Rmax, pr, path, rec_name, o
             theta_n = 100  # default theta_n=100, however, if R increased significantly theta_n should also increase
             # joblib_output = Parallel(n_jobs=num_cores)(delayed(select_data_points_radial_average_MA)(x0,y0,Rmax,theta_n,file_name) for file_name in tqdm(file_names))
             joblib_output = Parallel(n_jobs=num_cores)(
-                delayed(select_data_points_radial_average_MA)(x0, y0, N_Rmax, theta_n, file_name) for file_name in
+                delayed(select_data_points_radial_average_MA)(x0, y0, N_Rmax, theta_range, file_name) for file_name in
                 tqdm(file_names))
 
         else:
@@ -614,6 +652,44 @@ def residual(params, df_amplitude_phase_measurement, sample_information, vacuum_
 
     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
 
+def residual_alpha_solar(params, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+             solar_simulator_settings, light_source_property, numerical_simulation_setting):
+
+    sample_information['alpha_r'] = params[0]
+    light_source_property['sigma_s'] = params[1]
+
+    df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
+                                                                          sample_information, vacuum_chamber_setting,
+                                                                          solar_simulator_settings,
+                                                                          light_source_property,
+                                                                          numerical_simulation_setting)
+
+    phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                            zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
+    amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                                zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
+
+    return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
+
+
+def residual_solar(params, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+             solar_simulator_settings, light_source_property, numerical_simulation_setting):
+
+    #sample_information['alpha_r'] = params[0]
+    light_source_property['sigma_s'] = params[0]
+
+    df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_amplitude_phase_measurement,
+                                                                          sample_information, vacuum_chamber_setting,
+                                                                          solar_simulator_settings,
+                                                                          light_source_property,
+                                                                          numerical_simulation_setting)
+
+    phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                            zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
+    amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                                zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
+
+    return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
 
 def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase_measurement, sample_information,
                             vacuum_chamber_setting, solar_simulator_settings, light_source_property,
