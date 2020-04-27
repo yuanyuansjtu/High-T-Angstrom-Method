@@ -69,7 +69,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
                              R_analysis,
                              exp_amp_phase_extraction_method):
     # we basically break entire disk into 6 regions, with interval of pi/3
-    plt.figure(figsize=(9, 8))
+    plt.figure(figsize=(8, 6))
     colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta']
     for j in range(6):
         # note radial_temperature_average_disk_sample automatically checks if a dump file exist
@@ -78,14 +78,20 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
                                                                         exp_amp_phase_extraction_method)
 
-        ax = plt.gca()
         plt.scatter(df_amplitude_phase_measurement['r'],
                     df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
-                    s=80, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
 
-    plt.xlabel('R (m)', fontsize=14)
-    plt.ylabel('Amplitude Ratio', fontsize=14)
-
+    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
+    plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
+    plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=14, fontweight='bold')
     plt.legend()
     plt.show()
 
