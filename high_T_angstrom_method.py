@@ -31,7 +31,7 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     theta_min = theta_range[0]
     theta_max = theta_range[1]
 
-    theta_n = int(abs(theta_max-theta_min)/(2*np.pi)*120) # previous studies have shown that 2Pi requires above 100 theta points to yield accurate results
+    theta_n = int(abs(theta_max-theta_min)/(2*np.pi)*180) # previous studies have shown that 2Pi requires above 100 theta points to yield accurate results
 
     theta = np.linspace(theta_min, theta_max, theta_n)  # The angles 1D array (rad)
     df_temp = df_raw.iloc[5:, :]
@@ -63,39 +63,211 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     return T_interpolate, time_in_seconds
 
 
-# here we work on theta averaged temperature profiles
+
 
 def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
                              R_analysis,
                              exp_amp_phase_extraction_method):
     # we basically break entire disk into 6 regions, with interval of pi/3
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(18.3, 12))
     colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta']
+
+    df_temperature_list = []
+    df_amp_phase_list = []
+
+    plt.subplot(231)
+
     for j in range(6):
         # note radial_temperature_average_disk_sample automatically checks if a dump file exist
-        df_temperature = radial_temperature_average_disk_sample(x0, y0, N_Rmax, [np.pi / 3 * j, np.pi / 3 * (j + 1)],
-                                                                pr, path, rec_name, output_name, method, num_cores)
+        df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
+                                                                               [[np.pi / 3 * j, np.pi / 3 * (j + 1)]],
+                                                                               pr, path, rec_name, output_name, method,
+                                                                               num_cores)
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
                                                                         exp_amp_phase_extraction_method)
+        df_temperature_list.append(df_temperature)
+        df_amp_phase_list.append(df_amplitude_phase_measurement)
 
         plt.scatter(df_amplitude_phase_measurement['r'],
                     df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
                     s=60, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontsize(fontsize=10)
         tick.label.set_fontweight('bold')
     for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontsize(fontsize=10)
         tick.label.set_fontweight('bold')
 
-    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
-    plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
-    plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=14, fontweight='bold')
+    plt.xlabel('R (m)', fontsize=12, fontweight='bold')
+    plt.ylabel('Amplitude Ratio', fontsize=12, fontweight='bold')
+    plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=12, fontweight='bold')
     plt.legend()
+
+    plt.subplot(232)
+
+    for j in range(6):
+        df_temperature = df_temperature_list[j]
+        df_amplitude_phase_measurement = df_amp_phase_list[j]
+        plt.scatter(df_amplitude_phase_measurement['r'],
+                    df_amplitude_phase_measurement['phase_diff'], facecolors='none',
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+
+    plt.xlabel('R (m)', fontsize=12, fontweight='bold')
+    plt.ylabel('Phase difference (rad)', fontsize=12, fontweight='bold')
+    plt.title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+    plt.legend()
+
+    plt.subplot(233)
+
+    for j in range(6):
+        df_temperature = df_temperature_list[j]
+        time_max = 10 * 1 / f_heating  # only show 10 cycles
+        df_temperature = df_temperature.query('reltime<{:.2f}'.format(time_max))
+        plt.plot(df_temperature['reltime'],
+                 df_temperature.iloc[:, R0], linewidth=2, color=colors[j],
+                 label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+
+    plt.xlabel('Time (s)', fontsize=12, fontweight='bold')
+    plt.ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+    plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
+    plt.legend()
+
+    plt.subplot(234)
+
+    file_name_0 = [path + x for x in os.listdir(path)][0]
+    n0 = file_name_0.rfind('//')
+    n1 = file_name_0.rfind('.csv')
+    frame_num = file_name_0[n0 + 2:n1]
+
+    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 12)
+    plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.add_artist(circle1)
+    ax.add_artist(circle2)
+
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+
+    plt.subplot(235)
+
+    file_name_0 = [path + x for x in os.listdir(path)][40]
+    n0 = file_name_0.rfind('//')
+    n1 = file_name_0.rfind('.csv')
+    frame_num = file_name_0[n0 + 2:n1]
+
+    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(30, R_analysis - 10)
+
+    manual_locations = [(x0 - 5, y0 - 5), (x0 - 15, y0 - 15), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 12)
+    plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.add_artist(circle1)
+    ax.add_artist(circle2)
+
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+
+    plt.subplot(236)
+
+    file_name_0 = [path + x for x in os.listdir(path)][100]
+    n0 = file_name_0.rfind('//')
+    n1 = file_name_0.rfind('.csv')
+    frame_num = file_name_0[n0 + 2:n1]
+
+    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+    Z = np.array(df_first_frame_temperature.iloc[y0 - R_analysis:y0 + R_analysis, x0 - R_analysis:x0 + R_analysis])
+    x = np.arange(x0 - R_analysis, x0 + R_analysis, 1)
+    y = np.arange(y0 - R_analysis, y0 + R_analysis, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(30, R_analysis - 10)
+
+    manual_locations = [(x0 - 5, y0 - 5), (x0 - 15, y0 - 15), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 5)
+    plt.plot([x0 - R_analysis, x0 + R_analysis], [y0, y0], ls='-.', color='k',
+             lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [y0 - R_analysis, y0 + R_analysis], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+
     plt.show()
 
+    amp_ratio_list = np.array([np.array(df_amp_phase_list[i]['amp_ratio']) for i in range(6)])
+    phase_diff_list = np.array([np.array(df_amp_phase_list[i]['phase_diff']) for i in range(6)])
+    weight = np.linspace(1, 0.6, len(np.std(amp_ratio_list, axis=0)))
+    amp_std = np.std(amp_ratio_list, axis=0)
+    phase_std = np.std(phase_diff_list, axis=0)
+    weight_amp_phase_std = (amp_std + phase_std) * weight
+    sum_std = np.sum(weight_amp_phase_std)
 
+    return sum_std
 
 
 
@@ -176,7 +348,7 @@ def select_data_points_radial_average_HY(x0, y0, Rmax, file_name):
     return T_interpolate, time_in_seconds
 
 
-def radial_temperature_average_disk_sample(x0, y0, N_Rmax,theta_range, pr, path, rec_name, output_name, method,
+def radial_temperature_average_disk_sample_old(x0, y0, N_Rmax,theta_range, pr, path, rec_name, output_name, method,
                                            num_cores):  # unit in K
     # path= "C://Users//NTRG lab//Desktop//yuan//"
     # rec_name = "Rec-000011_e63", this is the folder which contains all csv data files
@@ -228,6 +400,71 @@ def radial_temperature_average_disk_sample(x0, y0, N_Rmax,theta_range, pr, path,
     df_temperature['reltime'] = time_data
 
     return df_temperature  # note the column i of the df_temperature indicate the temperature in pixel i
+
+
+def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name,
+                                                          output_name, method,
+                                                          num_cores):  # unit in K
+    # path= "C://Users//NTRG lab//Desktop//yuan//"
+    # rec_name = "Rec-000011_e63", this is the folder which contains all csv data files
+    # note theta_range should be a 2D array [[0,pi/3],[pi/3*2,2pi]]
+    df_temperature_list = []
+    for theta_range in theta_range_list:
+        dump_file_path = output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(
+            180 / np.pi * theta_range[0]), int(180 / np.pi * theta_range[1]))
+
+        if (os.path.isfile(dump_file_path)):  # First check if a dump file exist:
+            print('Found previous dump file :' + dump_file_path)
+            temp_dump = pickle.load(open(dump_file_path, 'rb'))
+
+        else:  # If not we obtain the dump file, note the dump file is averaged radial temperature
+
+            file_names = [path + x for x in os.listdir(path)]
+            s_time = time.time()
+
+            if method == 'MA':  # default method, this one is much faster
+                theta_n = 100  # default theta_n=100, however, if R increased significantly theta_n should also increase
+                # joblib_output = Parallel(n_jobs=num_cores)(delayed(select_data_points_radial_average_MA)(x0,y0,Rmax,theta_n,file_name) for file_name in tqdm(file_names))
+                joblib_output = Parallel(n_jobs=num_cores)(
+                    delayed(select_data_points_radial_average_MA)(x0, y0, N_Rmax, theta_range, file_name) for file_name
+                    in
+                    tqdm(file_names))
+
+            else:
+                joblib_output = Parallel(n_jobs=num_cores)(
+                    delayed(select_data_points_radial_average_HY)(x0, y0, N_Rmax, file_name) for file_name in
+                    tqdm(file_names))
+
+            pickle.dump(joblib_output, open(dump_file_path, "wb"))  # create a dump file
+
+            e_time = time.time()
+            print('Time to process the entire dataset is {}'.format((e_time - s_time)))
+
+            temp_dump = pickle.load(open(dump_file_path, 'rb'))
+
+        temp_dump = np.array(temp_dump);
+        temp_dump = temp_dump[temp_dump[:, 1].argsort()]  # sort based on the second column, which is relative time
+
+        temp_profile = [];
+        time_series = []
+        for item in temp_dump:
+            temp_profile.append(item[0])
+            time_series.append(item[1])
+        time_series = np.array(time_series)
+        temp_data = np.array(temp_profile)
+        time_data = time_series - min(time_series)  # such that time start from zero
+
+        df_temperature = pd.DataFrame(
+            data=temp_data)  # return a dataframe containing radial averaged temperature and relative time
+        df_temperature['reltime'] = time_data
+        df_temperature_list.append(df_temperature)
+
+    cols = df_temperature_list[0].columns
+    data = np.array([np.array(df_temperature_list_.iloc[:, :]) for df_temperature_list_ in df_temperature_list])
+    data_mean = np.mean(data, axis=0)
+    df_averaged_temperature = pd.DataFrame(data=data_mean, columns=cols)
+
+    return df_averaged_temperature  # note the column i of the df_temperature indicate the temperature in pixel i
 
 
 def sin_func(t, amplitude, phase, bias, f_heating):
@@ -722,6 +959,7 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
         tick.label.set_fontsize(fontsize=12)
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
+    plt.title('{}, f = {} Hz'.format(solar_simulator_settings['rec_name'],solar_simulator_settings['f_heating']), fontsize=12, fontweight='bold')
     # plt.legend()
 
     plt.subplot(132)
@@ -739,6 +977,7 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
         tick.label.set_fontsize(fontsize=12)
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
+    plt.title('alpha = {:.2E} m2/s'.format(alpha_r_optimized), fontsize=12, fontweight='bold')
 
     plt.subplot(133)
 
@@ -768,21 +1007,19 @@ def show_regression_results(alpha_r_optimized, df_temperature,df_amplitude_phase
         tick.label.set_fontsize(fontsize=12)
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
-
-    plt.tight_layout()
-
-    rec_name = solar_simulator_settings['rec_name']
-    f_heating = solar_simulator_settings['f_heating']
-    plt.title(rec_name+', f_heating = '+str(f_heating)+' Hz')
-    plt.show()
-
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
     dr = R/Nr
 
-    T_average = np.sum([2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
+    T_average = np.sum([2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (
+                            ((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
+    plt.title('Tmin:{:.0f}K, Tmax:{:.0f}K, Tmean:{:.0f}K'.format(np.mean(df_temperature_[N_outer]),np.mean(df_temperature_[N_inner]), T_average), fontsize=12, fontweight='bold')
 
-    print('Temperature range for the parameter estimation is between {:.1f} and {:.1f} K. The mean temperature of the sample is {:.1f} K'.format(np.mean(df_temperature_[N_outer]),np.mean(df_temperature_[N_inner]),T_average))
+
+    plt.tight_layout()
+
+
+    plt.show()
 
 
 def sensitivity_model_output(f_heating, X_input_array, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
