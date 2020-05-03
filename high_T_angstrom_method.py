@@ -952,11 +952,11 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
                             numerical_simulation_setting):
     if param_name =='alpha':
         sample_information['alpha_r'] = regression_result
-        title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f}'.format(regression_result,solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
+        title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
 
     elif param_name == 'sigma_s':
         light_source_property['sigma_s'] = regression_result
-        title_text = 'sigma_s = {:.2E}, VDC = {} V, TS1 = {:.0f}'.format(regression_result, solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
+        title_text = 'sigma_s = {:.2E}, VDC = {} V, TS1 = {:.0f} K'.format(regression_result, solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
 
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,
         df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
@@ -1046,26 +1046,10 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
 
     plt.show()
 
-    return fig
+    return fig,T_average
 
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
-
-    """
-    It run one row of the excel sheet.
-        df_exp_condition = pd.read_excel('batch_process_results.xlsx')
-        #df_exp_condition.iloc[0,:]
-
-        #path= "C://Users//NTRG lab//Desktop//Angstrom Method//Rec-000118_e53//" # path of the directory containing filr csv data files
-        rec_name = "HYPC_Rec-000003"
-        #path= "C://Users//yuan//Desktop//Amgstrom_method//temperature data//"+str(rec_name)+"//" # path of the directory containing filr csv data files
-
-        df_exp_condition = df_exp_condition.query("rec_name in ['{}']".format(rec_name)).iloc[0,:]
-        data_directory = "C://Users//yuan//Desktop//Amgstrom_method//temperature data//"
-
-    """
-
-
 
     rec_name = df_exp_condition['rec_name']
     path = data_directory + str(rec_name) + "//"
@@ -1152,11 +1136,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
     regression_result = None
 
     if df_exp_condition['regression_result_type'] == 'alpha':
-        res = minimize(residual, x0=2.4e-5, args=(
+        res = minimize(residual, x0=float(df_exp_condition['p_initial']), args=(
         df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
         solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
 
-        fig_regression = show_regression_results('alpha', res['final_simplex'][0][0][0], df_temperature,
+        fig_regression,T_average = show_regression_results('alpha', res['final_simplex'][0][0][0], df_temperature,
                                                  df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property,
@@ -1164,10 +1148,10 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
         regression_result = res['final_simplex'][0][0][0]
 
     elif df_exp_condition['regression_result_type'] == 'sigma_s':
-        res = minimize(residual_solar, x0=0.015, args=(
-        df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
+        res = minimize(residual_solar, x0=float(df_exp_condition['p_initial']), args=(
+        df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
         light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
-        fig_regression = show_regression_results('sigma_s', res['final_simplex'][0][0][0], df_temperature,
+        fig_regression, T_average= show_regression_results('sigma_s', res['final_simplex'][0][0][0], df_temperature,
                                                  df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property,
@@ -1175,7 +1159,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
 
         regression_result = res['final_simplex'][0][0][0]
 
-    return regression_result, fig_symmetry, fig_regression, sum_std
+    return regression_result, fig_symmetry, fig_regression, sum_std,T_average
 
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
