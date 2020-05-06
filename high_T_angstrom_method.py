@@ -192,7 +192,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.subplot(235)
 
-    file_name_0 = [path + x for x in os.listdir(path)][40]
+    N_mid = int(len([path + x for x in os.listdir(path)])/3)
+    file_name_0 = [path + x for x in os.listdir(path)][N_mid]
     n0 = file_name_0.rfind('//')
     n1 = file_name_0.rfind('.csv')
     frame_num = file_name_0[n0 + 2:n1]
@@ -232,7 +233,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.subplot(236)
 
-    file_name_0 = [path + x for x in os.listdir(path)][100]
+    file_name_0 = [path + x for x in os.listdir(path)][0]
     n0 = file_name_0.rfind('//')
     n1 = file_name_0.rfind('.csv')
     frame_num = file_name_0[n0 + 2:n1]
