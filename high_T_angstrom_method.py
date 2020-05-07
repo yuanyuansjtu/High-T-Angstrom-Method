@@ -1170,21 +1170,29 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
     # df_r_ref_locations just indicate how to calculate amplitude and phase, where is reference line
 
     alpha_r = X_input_array[0]
-    emissivity = X_input_array[3]
-    absorptivity = emissivity
-    N_Rs = X_input_array[5]
-    T_sur1 = X_input_array[4]
     Amax = X_input_array[1]
     sigma_s = X_input_array[2]
+    emissivity = X_input_array[3]
+    T_sur1 = X_input_array[4]
+    T_sur2 = X_input_array[5]
+    rho = X_input_array[6]
+    N_Rs = X_input_array[7]
+    t_z = X_input_array[8]
+    absorptivity = emissivity
 
     solar_simulator_settings['f_heating'] = f_heating
     sample_information['alpha_r'] = alpha_r
     sample_information['emissivity'] = emissivity
     sample_information['absorptivity'] = absorptivity
+    sample_information['t_z'] = t_z
+    sample_information['rho'] = rho
+
     vacuum_chamber_setting['N_Rs'] = N_Rs
     vacuum_chamber_setting['T_sur1'] = T_sur1
+    vacuum_chamber_setting['T_sur2'] = T_sur2
     light_source_property['Amax'] = Amax
     light_source_property['sigma_s'] = sigma_s
+
 
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,df_r_ref_locations,
                                                                                                      sample_information,
@@ -1200,13 +1208,13 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
     return df_amp_phase_simulated
 
 
-def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
                              solar_simulator_settings, light_source_property):
     s_time = time.time()
     X_input_arrays = pickle.load(open(X_dump_file_name, 'rb')) # obtain pre-defined simulation conditions
 
     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
-        delayed(sensitivity_model_output)(f_heating, X_input_array, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
+        delayed(sensitivity_model_output)(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
                              solar_simulator_settings, light_source_property) for X_input_array in tqdm(X_input_arrays) for f_heating
         in f_heating_list)
 
