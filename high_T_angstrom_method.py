@@ -1205,7 +1205,7 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
 
     df_amp_phase_simulated['alpha'] = np.array([alpha_r for i in range(len(df_amp_phase_simulated))])
 
-    return df_amp_phase_simulated
+    return df_amp_phase_simulated,df_temperature_simulation
 
 
 def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
