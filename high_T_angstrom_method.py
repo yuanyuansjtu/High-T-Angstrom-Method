@@ -785,7 +785,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
             if (p>0) & (p % N_one_cycle ==0) & (frequency_analysis_method != 'fft'):
                 A_max = np.max(T[p-N_one_cycle:p,:],axis = 0)
                 A_min = np.min(T[p-N_one_cycle:p,:],axis = 0)
-                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<2e-2:
+                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<1e-2:
                     N_steady_count += 1
                     if N_steady_count == 2: # only need 2 periods to calculate amplitude and phase
                         time_index = p
