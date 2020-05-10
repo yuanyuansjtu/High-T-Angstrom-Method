@@ -1051,6 +1051,7 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
 
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
+    #this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
     path = data_directory + str(rec_name) + "//"
@@ -1176,11 +1177,12 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
     T_sur1 = X_input_array[4]
     T_sur2 = X_input_array[5]
     rho = X_input_array[6]
-    N_Rs = X_input_array[7]
+    N_Rs = int(X_input_array[7])
     t_z = X_input_array[8]
     absorptivity = emissivity
 
     solar_simulator_settings['f_heating'] = f_heating
+
     sample_information['alpha_r'] = alpha_r
     sample_information['emissivity'] = emissivity
     sample_information['absorptivity'] = absorptivity
@@ -1190,6 +1192,7 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
     vacuum_chamber_setting['N_Rs'] = N_Rs
     vacuum_chamber_setting['T_sur1'] = T_sur1
     vacuum_chamber_setting['T_sur2'] = T_sur2
+
     light_source_property['Amax'] = Amax
     light_source_property['sigma_s'] = sigma_s
 
