@@ -1176,7 +1176,7 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
     T_sur1 = X_input_array[4]
     T_sur2 = X_input_array[5]
     rho = X_input_array[6]
-    N_Rs = X_input_array[7]
+    N_Rs = int(X_input_array[7])
     t_z = X_input_array[8]
     absorptivity = emissivity
 
