@@ -948,28 +948,37 @@ def residual_solar(params, df_temperature, df_amplitude_phase_measurement, sampl
 
     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
 
-def show_regression_results(param_name, regression_result, df_temperature,df_amplitude_phase_measurement, sample_information,
-                            vacuum_chamber_setting, solar_simulator_settings, light_source_property,
-                            numerical_simulation_setting):
-    if param_name =='alpha':
+
+def show_regression_results(param_name, regression_result, df_temperature, df_amplitude_phase_measurement,
+                            sample_information,vacuum_chamber_setting, solar_simulator_settings, light_source_property,numerical_simulation_setting):
+
+    if param_name == 'alpha':
         sample_information['alpha_r'] = regression_result
-        title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
+        title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,
+                                                                              solar_simulator_settings['V_DC'],
+                                                                              vacuum_chamber_setting['T_sur1'])
 
     elif param_name == 'sigma_s':
         light_source_property['sigma_s'] = regression_result
-        title_text = 'sigma_s = {:.2E}, VDC = {} V, TS1 = {:.0f} K'.format(regression_result, solar_simulator_settings['V_DC'],vacuum_chamber_setting['T_sur1'])
+        title_text = 'sigma_s = {:.2E}, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,
+                                                                           solar_simulator_settings['V_DC'],
+                                                                           vacuum_chamber_setting['T_sur1'])
 
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,
-        df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
-        light_source_property, numerical_simulation_setting)
-
+                                                                                                     df_amplitude_phase_measurement,
+                                                                                                     sample_information,
+                                                                                                     vacuum_chamber_setting,
+                                                                                                     solar_simulator_settings,
+                                                                                                     light_source_property,
+                                                                                                     numerical_simulation_setting)
 
     fig = plt.figure(figsize=(15, 5))
     # plt.scatter(df_result_IR_mosfata['r'],df_result_IR_mosfata['amp_ratio'],facecolors='none',edgecolors='k',label = 'Mostafa')
     plt.subplot(131)
     plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
                 edgecolors='r', label='measurement results')
-    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+', label='regression results')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+',
+                label='regression results')
 
     plt.xlabel('R (m)', fontsize=14, fontweight='bold')
     plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
@@ -982,13 +991,15 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
         tick.label.set_fontsize(fontsize=12)
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
-    plt.title('{}, f = {} Hz'.format(solar_simulator_settings['rec_name'],solar_simulator_settings['f_heating']), fontsize=11, fontweight='bold')
+    plt.title('{}, f = {} Hz'.format(solar_simulator_settings['rec_name'], solar_simulator_settings['f_heating']),
+              fontsize=11, fontweight='bold')
     # plt.legend()
 
     plt.subplot(132)
     plt.scatter(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['phase_diff'], facecolors='none',
                 edgecolors='r', label='measurement results')
-    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+', label='regression results')
+    plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+',
+                label='regression results')
 
     plt.xlabel('R (m)', fontsize=14, fontweight='bold')
     plt.ylabel('Phase difference (rad)', fontsize=14, fontweight='bold')
@@ -1003,27 +1014,35 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
 
     plt.title(title_text, fontsize=11, fontweight='bold')
 
-
-
     plt.subplot(133)
 
-    df_temperature_ = df_temperature.query('reltime>'+str(min(df_temperature_simulation['reltime']))+' and reltime< '+str(max(df_temperature_simulation['reltime'])))
+    # df_temperature_ = df_temperature.query('reltime>'+str(min(df_temperature_simulation['reltime']))+' and reltime< '+str(max(df_temperature_simulation['reltime'])))
+    df_temperature_simulation['reltime'] = df_temperature_simulation['reltime'] - min(
+        df_temperature_simulation['reltime'])
 
-    N_actual_data_per_period = int(len(df_temperature) / (max(df_temperature['reltime']) / (1 / solar_simulator_settings['f_heating'])))
+    time_interval = max(df_temperature_simulation['reltime']) - min(df_temperature_simulation['reltime'])
+    df_temperature_ = df_temperature.query('reltime<' + str(time_interval))
+    # print(df_temperature_)
+    N_actual_data_per_period = int(
+        len(df_temperature_) / (max(df_temperature_['reltime']) / (1 / solar_simulator_settings['f_heating'])))
 
-    N_skip = int(N_actual_data_per_period/20) #only shows 20 data points per cycle maximum
-
+    # print("Number of data per period is {}".format(N_actual_data_per_period))
+    N_skip = max(1, int(N_actual_data_per_period / 15))  # only shows 20 data points per cycle maximum
+    # print(N_skip)
     N_inner = int(df_amplitude_phase_measurement['r'].min())
     N_outer = int(df_amplitude_phase_measurement['r'].max())
-    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_inner], label='simulated R = '+str(N_inner)+' pixel')
-    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_inner][::N_skip], label='measured R = '+str(N_inner)+' pixel, skip '+str(N_skip))
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_inner],
+             label='simulated R = ' + str(N_inner) + ' pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_inner][::N_skip],
+                label='measured R = ' + str(N_inner) + ' pixel, skip ' + str(N_skip))
 
-    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_outer], label='simulated R = '+str(N_outer)+' pixel')
-    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_outer][::N_skip], label='measured R = '+str(N_outer)+' pixel, skip '+str(N_skip))
+    plt.plot(df_temperature_simulation['reltime'], df_temperature_simulation[N_outer],
+             label='simulated R = ' + str(N_outer) + ' pixel')
+    plt.scatter(df_temperature_['reltime'][::N_skip], df_temperature_[N_outer][::N_skip],
+                label='measured R = ' + str(N_outer) + ' pixel, skip ' + str(N_skip))
 
     plt.xlabel('Time (s)', fontsize=14, fontweight='bold')
     plt.ylabel('Temperature (K)', fontsize=14, fontweight='bold')
-
 
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
@@ -1035,22 +1054,23 @@ def show_regression_results(param_name, regression_result, df_temperature,df_amp
     plt.legend(prop={'weight': 'bold', 'size': 12})
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
-    dr = R/Nr
+    dr = R / Nr
 
-    T_average = np.sum([2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (
-                            ((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
-    plt.title('Tmin:{:.0f}K, Tmax:{:.0f}K, Tmean:{:.0f}K'.format(np.mean(df_temperature_[N_outer]),np.mean(df_temperature_[N_inner]), T_average), fontsize=11, fontweight='bold')
-
+    T_average = np.sum(
+        [2 * np.pi * dr * m_ * dr * np.mean(df_temperature_.iloc[:, m_]) for m_ in np.arange(N_inner, N_outer, 1)]) / (
+                        ((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
+    plt.title('Tmin:{:.0f}K, Tmax:{:.0f}K, Tmean:{:.0f}K'.format(np.mean(df_temperature_[N_outer]),
+                                                                 np.mean(df_temperature_[N_inner]), T_average),
+              fontsize=11, fontweight='bold')
 
     plt.tight_layout()
 
-
     plt.show()
 
-    return fig,T_average
+    return fig, T_average
 
 
-def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
+def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic_figure,df_temperature,df_amplitude_phase_measurement):
     #this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
@@ -1079,30 +1099,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
     exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
     # df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature,f_heating,R0,gap,R_analysis,'fft')
 
-    sum_std, fig_symmetry = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method, num_cores,
-                                                     f_heating, R0, gap, R_analysis,
-                                                     exp_amp_phase_extraction_method)
+    # sum_std, fig_symmetry = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method, num_cores,
+    #                                                  f_heating, R0, gap, R_analysis,
+    #                                                  exp_amp_phase_extraction_method)
     # print(sum_std)
 
-    bb = df_exp_condition['anguler_range']
-    bb = bb[1:-1]
-    index = None
-    angle_range = []
-    while (index != -1):
-        index = bb.find("],[")
-        element = bb[:index]
-        d = element.find(",")
-        element_after_comma = element[d + 1:]
-        element_before_comma = element[element.find("[") + 1:d]
-        # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
-        bb = bb[index + 2:]
-        angle_range.append([int(element_before_comma), int(element_after_comma)])
-
-    df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
-                                                                           rec_name, output_name, method, num_cores)
-
-    df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
-                                                                    exp_amp_phase_extraction_method)
 
     sample_information = {'R': df_exp_condition['R'], 't_z': df_exp_condition['t_z'], 'rho': df_exp_condition['rho'],
                           'cp_const': df_exp_condition['cp_const'], 'cp_c1':
@@ -1161,7 +1162,82 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory):
 
         regression_result = res['final_simplex'][0][0][0]
 
-    return regression_result, fig_symmetry, fig_regression, sum_std,T_average
+    return regression_result, diagnostic_figure, fig_regression,T_average
+
+
+def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores):
+    df_exp_condition_spreadsheet = pd.read_excel(df_exp_condition_spreadsheet_filename)
+    # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
+
+    diagnostic_figure_list = []
+    df_temperature_list = []
+    df_amplitude_phase_measurement_list = []
+
+    for i in range(len(df_exp_condition_spreadsheet)):
+
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        rec_name = df_exp_condition['rec_name']
+        path = data_directory + str(rec_name) + "//"
+
+        output_name = rec_name
+        # num_cores = df_exp_condition['num_cores']
+
+        method = df_exp_condition['average_method']  # indicate Mosfata's code
+        # print(method)
+
+        x0 = df_exp_condition['x0']  # in pixels
+        y0 = df_exp_condition['y0']  # in pixels
+        Rmax = df_exp_condition['Rmax']  # in pixels
+        # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
+        pr = df_exp_condition['pr']
+        # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
+
+        # After obtaining temperature profile, next we obtain amplitude and phase
+        f_heating = df_exp_condition['f_heating']
+        # 1cm ->35
+        R0 = df_exp_condition['R0']
+        gap = df_exp_condition['gap']
+        # Rmax = 125
+        R_analysis = df_exp_condition['R_analysis']
+        exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
+
+        sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
+                                                              num_cores,
+                                                              f_heating, R0, gap, R_analysis,
+                                                              exp_amp_phase_extraction_method)
+
+        diagnostic_figure_list.append(diagnostic_figure)
+
+        bb = df_exp_condition['anguler_range']
+        bb = bb[1:-1]
+        index = None
+        angle_range = []
+        while (index != -1):
+            index = bb.find("],[")
+            element = bb[:index]
+            d = element.find(",")
+            element_after_comma = element[d + 1:]
+            element_before_comma = element[element.find("[") + 1:d]
+            # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
+            bb = bb[index + 2:]
+            angle_range.append([int(element_before_comma), int(element_after_comma)])
+
+        df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
+                                                                               rec_name, output_name, method, num_cores)
+
+        df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
+                                                                        exp_amp_phase_extraction_method)
+        df_temperature_list.append(df_temperature)
+        df_amplitude_phase_measurement_list.append(df_amplitude_phase_measurement)
+    # regression_result, diagnostic_figure, regression_figure, sum_std,T_average = high_T_Angstrom_execute_one_case(df_exp_condition,data_directory)
+    joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
+        delayed(high_T_Angstrom_execute_one_case)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,
+                                                  diagnostic_figure_list[i], df_temperature_list[i],
+                                                  df_amplitude_phase_measurement_list[i]) for i in
+        tqdm(range(len(df_exp_condition_spreadsheet))))
+    # joblib_output
+    pickle.dump(joblib_output, open("sensitivity_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
