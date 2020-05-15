@@ -150,15 +150,45 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
     plt.legend()
 
+
+    rep_csv_dump_path = "temperature cache dump//"+rec_name + '_rep_dump'
+    #rec_name
+    if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
+        temp_dump = pickle.load(open(rep_csv_dump_path, 'rb'))
+        df_first_frame = temp_dump[0]
+        df_mid_frame = temp_dump[1]
+        frame_num_first = temp_dump[2]
+        frame_num_mid = temp_dump[3]
+
+    else:  # If not we obtain the dump file, note the dump file is averaged radial temperature
+
+        file_name_0 = [path + x for x in os.listdir(path)][0]
+        n0 = file_name_0.rfind('//')
+        n1 = file_name_0.rfind('.csv')
+        frame_num_first = file_name_0[n0 + 2:n1]
+
+        df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+
+
+        N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
+        file_name_1 = [path + x for x in os.listdir(path)][N_mid]
+        n2 = file_name_1.rfind('//')
+        n3 = file_name_1.rfind('.csv')
+        frame_num_mid = file_name_1[n2 + 2:n3]
+
+        df_mid_frame = pd.read_csv(file_name_1, sep=',', header=None, names=list(np.arange(0, 639)))
+
+        temp_dump = [df_first_frame,df_mid_frame, frame_num_first, frame_num_mid]
+
+        pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
+
+    df_mid_frame_temperature = df_mid_frame.iloc[5:, :]
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+
     plt.subplot(234)
 
-    file_name_0 = [path + x for x in os.listdir(path)][0]
-    n0 = file_name_0.rfind('//')
-    n1 = file_name_0.rfind('.csv')
-    frame_num = file_name_0[n0 + 2:n1]
 
-    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
-    df_first_frame_temperature = df_first_frame.iloc[5:, :]
     xmin = x0 - R0 - R_analysis
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
@@ -188,23 +218,16 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+    ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
 
     plt.subplot(235)
 
-    N_mid = int(len([path + x for x in os.listdir(path)])/3)
-    file_name_0 = [path + x for x in os.listdir(path)][N_mid]
-    n0 = file_name_0.rfind('//')
-    n1 = file_name_0.rfind('.csv')
-    frame_num = file_name_0[n0 + 2:n1]
 
-    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
-    df_first_frame_temperature = df_first_frame.iloc[5:, :]
     xmin = x0 - R0 - R_analysis
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
     ymax = y0 + R0 + R_analysis
-    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    Z = np.array(df_mid_frame_temperature.iloc[ymin:ymax, xmin:xmax])
     x = np.arange(xmin, xmax, 1)
     y = np.arange(ymin, ymax, 1)
     X, Y = np.meshgrid(x, y)
@@ -229,17 +252,17 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+    ax.set_title(frame_num_mid, fontsize=12, fontweight='bold')
 
     plt.subplot(236)
 
-    file_name_0 = [path + x for x in os.listdir(path)][0]
-    n0 = file_name_0.rfind('//')
-    n1 = file_name_0.rfind('.csv')
-    frame_num = file_name_0[n0 + 2:n1]
-
-    df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
-    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+    # file_name_0 = [path + x for x in os.listdir(path)][0]
+    # n0 = file_name_0.rfind('//')
+    # n1 = file_name_0.rfind('.csv')
+    # frame_num = file_name_0[n0 + 2:n1]
+    #
+    # df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+    # df_first_frame_temperature = df_first_frame.iloc[5:, :]
     Z = np.array(df_first_frame_temperature.iloc[y0 - R_analysis:y0 + R_analysis, x0 - R_analysis:x0 + R_analysis])
     x = np.arange(x0 - R_analysis, x0 + R_analysis, 1)
     y = np.arange(y0 - R_analysis, y0 + R_analysis, 1)
@@ -259,7 +282,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num, fontsize=12, fontweight='bold')
+    ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
 
     plt.show()
 
@@ -414,7 +437,7 @@ def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_
     # note theta_range should be a 2D array [[0,pi/3],[pi/3*2,2pi]]
     df_temperature_list = []
     for theta_range in theta_range_list:
-        dump_file_path = output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(theta_range[0]), int(theta_range[1]))
+        dump_file_path = "temperature cache dump//"+output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(theta_range[0]), int(theta_range[1]))
 
         if (os.path.isfile(dump_file_path)):  # First check if a dump file exist:
             print('Found previous dump file :' + dump_file_path)
@@ -1166,7 +1189,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
 
 
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores):
-    df_exp_condition_spreadsheet = pd.read_excel(df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
 
     diagnostic_figure_list = []
@@ -1230,6 +1253,7 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
                                                                         exp_amp_phase_extraction_method)
         df_temperature_list.append(df_temperature)
         df_amplitude_phase_measurement_list.append(df_amplitude_phase_measurement)
+
     # regression_result, diagnostic_figure, regression_figure, sum_std,T_average = high_T_Angstrom_execute_one_case(df_exp_condition,data_directory)
     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
         delayed(high_T_Angstrom_execute_one_case)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,
@@ -1237,7 +1261,7 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
                                                   df_amplitude_phase_measurement_list[i]) for i in
         tqdm(range(len(df_exp_condition_spreadsheet))))
     # joblib_output
-    pickle.dump(joblib_output, open("sensitivity_results_" + df_exp_condition_spreadsheet_filename, "wb"))
+    pickle.dump(joblib_output,open("result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
