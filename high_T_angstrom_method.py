@@ -27,9 +27,15 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
     df_raw = pd.read_csv(file_name, sep=',', header=None, names=list(np.arange(0, 639)))
     raw_time_string = df_raw.iloc[2, 0][df_raw.iloc[2, 0].find('=') + 2:]  # '073:02:19:35.160000'
+
+    # print(raw_time_string)
+    day_info = int(raw_time_string[:raw_time_string.find(":")])
     raw_time_string = raw_time_string[raw_time_string.find(":") + 1:]  # '02:19:35.160000'
+    # print(day_info)
     strip_time = datetime.strptime(raw_time_string, '%H:%M:%S.%f')
-    time_in_seconds = strip_time.hour * 3600 + strip_time.minute * 60 + strip_time.second + strip_time.microsecond / 10 ** 6
+    # print(raw_time_string)
+    time_in_seconds = day_info * 24 * 3600 + strip_time.hour * 3600 + strip_time.minute * 60 + strip_time.second + strip_time.microsecond / 10 ** 6
+    # print(time_in_seconds)
 
     theta_min = theta_range[0]*np.pi/180
     theta_max = theta_range[1]*np.pi/180
