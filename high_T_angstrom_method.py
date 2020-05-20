@@ -750,6 +750,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     cp_c3 = sample_information['cp_c3']
     alpha_r = sample_information['alpha_r']
     alpha_z = sample_information['alpha_z']
+    R0 = vacuum_chamber_setting['R0']
 
     T_initial = sample_information['T_initial']  # unit in K
     # k = alpha*rho*cp
@@ -867,7 +868,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
 
-    print('alpha_r = {:.2E}, sigma_s = {:.2E}, f_heating = {}, dt = {:.2E}, Nr = {}, Nt = {}, Fo_r = {:.2E}'.format(alpha_r,light_source_property['sigma_s'],f_heating, dt, Nr, Nt,Fo_r))
+    print('alpha_r = {:.2E}, sigma_s = {:.2E}, f_heating = {}, dt = {:.2E}, Nr = {}, Nt = {}, Fo_r = {:.2E}, R0 = {}'.format(alpha_r,light_source_property['sigma_s'],f_heating, dt, Nr, Nt,Fo_r,R0))
 
     return T[:time_index], time_simulation[:time_index], r,N_one_cycle
 
@@ -1190,7 +1191,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
                                                  numerical_simulation_setting)
 
         regression_result = res['final_simplex'][0][0][0]
-
+    print("recording {} completed.".format(rec_name))
     return regression_result, diagnostic_figure, fig_regression,T_average
 
 
