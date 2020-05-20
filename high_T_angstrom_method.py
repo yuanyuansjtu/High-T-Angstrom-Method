@@ -72,8 +72,6 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     return T_interpolate, time_in_seconds
 
 
-
-
 def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
                              R_analysis,
                              exp_amp_phase_extraction_method):
@@ -89,7 +87,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     for j in range(6):
         # note radial_temperature_average_disk_sample automatically checks if a dump file exist
         df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
-                                                                               [[60*j, 60*(j+1)]],
+                                                                               [[60 * j, 60 * (j + 1)]],
                                                                                pr, path, rec_name, output_name, method,
                                                                                num_cores)
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
@@ -156,9 +154,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
     plt.legend()
 
-
-    rep_csv_dump_path = "temperature cache dump//"+rec_name + '_rep_dump'
-    #rec_name
+    rep_csv_dump_path = "temperature cache dump//" + rec_name + '_rep_dump'
+    # rec_name
     if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
         print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
         temp_dump = pickle.load(open(rep_csv_dump_path, 'rb'))
@@ -176,7 +173,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
         df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
 
-
         N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
         file_name_1 = [path + x for x in os.listdir(path)][N_mid]
         n2 = file_name_1.rfind('//')
@@ -185,7 +181,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
         df_mid_frame = pd.read_csv(file_name_1, sep=',', header=None, names=list(np.arange(0, 639)))
 
-        temp_dump = [df_first_frame,df_mid_frame, frame_num_first, frame_num_mid]
+        temp_dump = [df_first_frame, df_mid_frame, frame_num_first, frame_num_mid]
 
         pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
 
@@ -193,7 +189,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     df_first_frame_temperature = df_first_frame.iloc[5:, :]
 
     plt.subplot(234)
-
 
     xmin = x0 - R0 - R_analysis
     xmax = x0 + R0 + R_analysis
@@ -228,7 +223,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.subplot(235)
 
-
     xmin = x0 - R0 - R_analysis
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
@@ -261,34 +255,14 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     ax.set_title(frame_num_mid, fontsize=12, fontweight='bold')
 
     plt.subplot(236)
+    T_mean_list = np.array(
+        [np.array(df_temperature.iloc[:, R0:R0 + R_analysis].mean(axis=0)) for df_temperature in df_temperature_list])
 
-    # file_name_0 = [path + x for x in os.listdir(path)][0]
-    # n0 = file_name_0.rfind('//')
-    # n1 = file_name_0.rfind('.csv')
-    # frame_num = file_name_0[n0 + 2:n1]
-    #
-    # df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
-    # df_first_frame_temperature = df_first_frame.iloc[5:, :]
-    Z = np.array(df_first_frame_temperature.iloc[y0 - R_analysis:y0 + R_analysis, x0 - R_analysis:x0 + R_analysis])
-    x = np.arange(x0 - R_analysis, x0 + R_analysis, 1)
-    y = np.arange(y0 - R_analysis, y0 + R_analysis, 1)
-    X, Y = np.meshgrid(x, y)
-
-    # mid = int(np.shape(Z)[1] / 2)
-    x3 = min(30, R_analysis - 10)
-
-    manual_locations = [(x0 - 5, y0 - 5), (x0 - 15, y0 - 15), (x0 - x3, y0 - x3)]
-    # fig, ax = plt.subplots(figsize=(6, 6))
+    plt.plot(np.arange(R0, R0 + R_analysis), T_mean_list.mean(axis=0), linewidth=2)
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 5)
-    plt.plot([x0 - R_analysis, x0 + R_analysis], [y0, y0], ls='-.', color='k',
-             lw=2)  # add a horizontal line cross x0,y0
-    plt.plot([x0, x0], [y0 - R_analysis, y0 + R_analysis], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
-    ax.invert_yaxis()
-    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
-    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
+    ax.set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('T_mean (K)', fontsize=12, fontweight='bold')
+    ax.set_title("Tmean vs R", fontsize=12, fontweight='bold')
 
     plt.show()
 
@@ -301,7 +275,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     sum_std = np.sum(weight_amp_phase_std)
 
     return sum_std, fig
-
 
 
 def select_data_points_radial_average_MA_match_model_grid(x0, y0, N_Rmax, pr, R_sample, theta_n,
@@ -922,6 +895,7 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
     return df_amp_phase_simulated,df_temperature_simulation
 
 
+
 def residual(params, df_temperature,df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
              solar_simulator_settings, light_source_property, numerical_simulation_setting):
     sample_information['alpha_r'] = params[0]
@@ -1001,6 +975,15 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
                                                                                                      solar_simulator_settings,
                                                                                                      light_source_property,
                                                                                                      numerical_simulation_setting)
+
+    phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                            zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
+    amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
+                                zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
+
+    amp_residual_mean =  np.mean(amplitude_relative_error)
+    phase_residual_mean = np.mean(phase_relative_error)
+    total_residual_mean = amp_residual_mean + phase_residual_mean
 
     fig = plt.figure(figsize=(15, 5))
     # plt.scatter(df_result_IR_mosfata['r'],df_result_IR_mosfata['amp_ratio'],facecolors='none',edgecolors='k',label = 'Mostafa')
@@ -1097,7 +1080,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
 
     plt.show()
 
-    return fig, T_average
+    return fig, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean
 
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic_figure,df_temperature,df_amplitude_phase_measurement):
@@ -1173,7 +1156,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
         df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
         solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
 
-        fig_regression,T_average = show_regression_results('alpha', res['final_simplex'][0][0][0], df_temperature,
+        fig_regression,T_average, amp_residual_mean, phase_residual_mean,total_residual_mean = show_regression_results('alpha', res['final_simplex'][0][0][0], df_temperature,
                                                  df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property,
@@ -1184,7 +1167,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
         res = minimize(residual_solar, x0=float(df_exp_condition['p_initial']), args=(
         df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
         light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
-        fig_regression, T_average= show_regression_results('sigma_s', res['final_simplex'][0][0][0], df_temperature,
+        fig_regression, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean= show_regression_results('sigma_s', res['final_simplex'][0][0][0], df_temperature,
                                                  df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property,
@@ -1192,7 +1175,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
 
         regression_result = res['final_simplex'][0][0][0]
     print("recording {} completed.".format(rec_name))
-    return regression_result, diagnostic_figure, fig_regression,T_average
+    return regression_result, diagnostic_figure, fig_regression,T_average,amp_residual_mean, phase_residual_mean,total_residual_mean
 
 
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores):
