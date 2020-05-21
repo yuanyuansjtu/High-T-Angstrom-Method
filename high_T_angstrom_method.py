@@ -20,6 +20,7 @@ from scipy.stats import norm
 from scipy.stats import multivariate_normal
 
 from scipy.optimize import minimize
+import matplotlib.ticker as mtick
 
 
 
@@ -1282,8 +1283,24 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename)
     return df_results_all
 
 
+def display_high_dimensional_regression_results(x_name, y_name, row_items, row_name, colume_items, column_name,
+                                                series_items, series_name, df_results_all, ylim):
+    f, axes = plt.subplots(len(row_items), len(colume_items),
+                           figsize=(int(len(colume_items) * 4), int(len(row_items) * 3)))
+    for i, row in enumerate(row_items):
+        for j, column in enumerate(colume_items):
+            df_results_all_ = df_results_all.query(
+                "regression_parameter == 'alpha' and {}=={} and {} == {}".format(row_name, row, column_name, column))
+            # VDC_list = np.unique(df_results_all_['VDC'])
+            for series in series_items:
+                df_ = df_results_all_.query("{}=={}".format(series_name, series))
+                axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {}".format(series_name, series))
+                axes[i, j].set_ylim(ylim)
+                axes[i, j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+                axes[i, j].set_title("{} = {},{} = {},{}".format(row_name, row, column_name, column, y_name))
+    plt.tight_layout(h_pad=2)
 
-
+    plt.show()
 
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
