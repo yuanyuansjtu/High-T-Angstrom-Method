@@ -1254,6 +1254,38 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
     pickle.dump(joblib_output,open("result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
 
+
+def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename):
+    regression_params = [joblib_output_[0] for joblib_output_ in joblib_output]
+    T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
+    amp_ratio_residual_list = [joblib_output_[4] for joblib_output_ in joblib_output]
+    phase_diff_residual_list = [joblib_output_[5] for joblib_output_ in joblib_output]
+    amp_phase_residual_list = [joblib_output_[6] for joblib_output_ in joblib_output]
+
+    df_exp_condition = pd.read_excel("batch process information//"+df_exp_condition_spreadsheet_filename)
+
+    sigma_s_list = []
+    alpha_list = []
+
+    for i,regression_type in enumerate(df_exp_condition['regression_result_type']):
+        if regression_type == 'sigma_s':
+            sigma_s_list.append(joblib_output[i][0])
+            alpha_list.append(df_exp_condition['alpha_r'][i])
+        elif regression_type == 'alpha':
+            sigma_s_list.append(df_exp_condition['sigma_s'][i])
+            alpha_list.append(joblib_output[i][0])
+
+    df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
+                                   'sigma_s':sigma_s_list,'T_average':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_list,
+                                   'regression_parameter':df_exp_condition['regression_result_type'],'T_sur1':df_exp_condition['T_sur1'],
+                                  'amp_ratio_residual':amp_ratio_residual_list,'phase_diff_residual':phase_diff_residual_list,'amp_phase_residual':amp_phase_residual_list})
+    return df_results_all
+
+
+
+
+
+
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
                              solar_simulator_settings, light_source_property):
     # X_input array is 2D array produced by python salib
