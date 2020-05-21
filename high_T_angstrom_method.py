@@ -1295,10 +1295,13 @@ def display_high_dimensional_regression_results(x_name, y_name, row_items, row_n
             for series in series_items:
                 df_ = df_results_all_.query("{}=={}".format(series_name, series))
                 axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {}".format(series_name, series))
+                axes[i, j].set_xlabel(x_name)
+                axes[i, j].set_ylabel(y_name)
                 axes[i, j].set_ylim(ylim)
                 axes[i, j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-                axes[i, j].set_title("{} = {},{} = {},{}".format(row_name, row, column_name, column, y_name))
+                axes[i, j].set_title("{} = {},{} = {}".format(row_name, row, column_name, column))
     plt.tight_layout(h_pad=2)
+    plt.legend()
 
     plt.show()
 
