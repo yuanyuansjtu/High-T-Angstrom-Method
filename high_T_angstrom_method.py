@@ -1278,7 +1278,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename)
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_list,
                                    'regression_parameter':df_exp_condition['regression_result_type'],'T_sur1':df_exp_condition['T_sur1'],
-                                  'amp_ratio_residual':amp_ratio_residual_list,'phase_diff_residual':phase_diff_residual_list,'amp_phase_residual':amp_phase_residual_list})
+                                   'amp_res':amp_ratio_residual_list,'phase_res':phase_diff_residual_list,'amp_phase_res':amp_phase_residual_list})
     return df_results_all
 
 
