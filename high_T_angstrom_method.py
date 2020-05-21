@@ -1283,12 +1283,16 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename)
     return df_results_all
 
 
-def display_high_dimensional_regression_results(x_name, y_name, row_items, row_name, colume_items, column_name,
-                                                series_items, series_name, df_results_all, ylim):
-    f, axes = plt.subplots(len(row_items), len(colume_items),
-                           figsize=(int(len(colume_items) * 4), int(len(row_items) * 3)))
+def display_high_dimensional_regression_results(x_name, y_name, row_name, column_name, series_name, df_results_all, ylim):
+
+    column_items = np.unique(df_results_all[column_name])
+    row_items = np.unique(df_results_all[row_name])
+    series_items= np.unique(df_results_all[series_name])
+
+    f, axes = plt.subplots(len(row_items), len(column_items),
+                           figsize=(int(len(column_items) * 4), int(len(row_items) * 3)))
     for i, row in enumerate(row_items):
-        for j, column in enumerate(colume_items):
+        for j, column in enumerate(column_items):
             df_results_all_ = df_results_all.query(
                 "regression_parameter == 'alpha' and {}=={} and {} == {}".format(row_name, row, column_name, column))
             # VDC_list = np.unique(df_results_all_['VDC'])
