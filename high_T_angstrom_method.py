@@ -1288,13 +1288,12 @@ def display_high_dimensional_regression_results(x_name, y_name, row_name, column
     column_items = np.unique(df_results_all[column_name])
     row_items = np.unique(df_results_all[row_name])
     series_items= np.unique(df_results_all[series_name])
-    reg_parameter_name = np.unique(df_results_all['regression_parameter'])[0]
+    #reg_parameter_name = np.unique(df_results_all['regression_parameter'])[0]
     f, axes = plt.subplots(len(row_items), len(column_items),
                            figsize=(int(len(column_items) * 4), int(len(row_items) * 3)))
     for i, row in enumerate(row_items):
         for j, column in enumerate(column_items):
-            df_results_all_ = df_results_all.query(
-                "regression_parameter == {} and {}=={} and {} == {}".format(reg_parameter_name,row_name, row, column_name, column))
+            df_results_all_ = df_results_all.query("{}=={} and {} == {}".format(row_name, row, column_name, column))
             # VDC_list = np.unique(df_results_all_['VDC'])
             for series in series_items:
                 df_ = df_results_all_.query("{}=={}".format(series_name, series))
