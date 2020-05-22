@@ -957,7 +957,7 @@ def residual_solar(params, df_temperature, df_amplitude_phase_measurement, sampl
 def show_regression_results(param_name, regression_result, df_temperature, df_amplitude_phase_measurement,
                             sample_information,vacuum_chamber_setting, solar_simulator_settings, light_source_property,numerical_simulation_setting):
 
-    if param_name == 'alpha':
+    if param_name == 'alpha_r':
         sample_information['alpha_r'] = regression_result
         title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,
                                                                               solar_simulator_settings['V_DC'],
@@ -1152,7 +1152,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
 
     regression_result = None
 
-    if df_exp_condition['regression_result_type'] == 'alpha':
+    if df_exp_condition['regression_result_type'] == 'alpha_r':
         res = minimize(residual, x0=float(df_exp_condition['p_initial']), args=(
         df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
         solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
@@ -1272,7 +1272,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename)
         if regression_type == 'sigma_s':
             sigma_s_list.append(joblib_output[i][0])
             alpha_list.append(df_exp_condition['alpha_r'][i])
-        elif regression_type == 'alpha':
+        elif regression_type == 'alpha_r':
             sigma_s_list.append(df_exp_condition['sigma_s'][i])
             alpha_list.append(joblib_output[i][0])
 
@@ -1352,7 +1352,7 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
 
     df_amp_phase_simulated['f_heating'] = np.array([f_heating for i in range(len(df_amp_phase_simulated))])
 
-    df_amp_phase_simulated['alpha'] = np.array([alpha_r for i in range(len(df_amp_phase_simulated))])
+    df_amp_phase_simulated['alpha_r'] = np.array([alpha_r for i in range(len(df_amp_phase_simulated))])
 
     return df_amp_phase_simulated
 
