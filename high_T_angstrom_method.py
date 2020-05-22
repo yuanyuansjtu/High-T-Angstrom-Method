@@ -1157,7 +1157,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
         df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
         solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
 
-        fig_regression,T_average, amp_residual_mean, phase_residual_mean,total_residual_mean = show_regression_results('alpha', res['final_simplex'][0][0][0], df_temperature,
+        fig_regression,T_average, amp_residual_mean, phase_residual_mean,total_residual_mean = show_regression_results('alpha_r', res['final_simplex'][0][0][0], df_temperature,
                                                  df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property,
