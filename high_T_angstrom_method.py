@@ -265,7 +265,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     ax.set_ylabel('T_mean (K)', fontsize=12, fontweight='bold')
     ax.set_title("Tmean vs R", fontsize=12, fontweight='bold')
 
-    plt.show()
+    #plt.show()
 
     amp_ratio_list = np.array([np.array(df_amp_phase_list[i]['amp_ratio']) for i in range(6)])
     phase_diff_list = np.array([np.array(df_amp_phase_list[i]['phase_diff']) for i in range(6)])
@@ -1079,7 +1079,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
 
     plt.tight_layout()
 
-    plt.show()
+    #plt.show()
 
     return fig, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean
 
