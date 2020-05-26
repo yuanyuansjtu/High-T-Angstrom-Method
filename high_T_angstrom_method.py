@@ -1483,6 +1483,138 @@ def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_
     return df_results_amp_ratio_complete, df_results_phase_difference_complete
 
 
+def main_effects_2_level_DOE(df_original, f_heating, parameter_name_list, df_r_ref_locations):
+    df_DOE = df_original.query('f_heating == {}'.format(f_heating))
+    param_main_list = []
+    N_index = len(parameter_name_list)
+
+    for parameter_name in parameter_name_list:
+        if parameter_name != 'f_heating':
+            param_unique = np.unique(df_DOE[parameter_name])
+
+            param_main = np.array(df_DOE.query('{}=={}'.format(parameter_name, param_unique[0])).iloc[:, N_index:].mean(
+                axis=0)) - np.array(
+                df_DOE.query('{}=={}'.format(parameter_name, param_unique[1])).iloc[:, N_index:].mean(axis=0))
+            param_main_list.append(param_main)
+
+    parameter_name_columns = parameter_name_list.copy()
+    parameter_name_columns.remove('f_heating')  # remember python pass by reference, it modifies the original list!
+
+    df_main_effect = pd.DataFrame(columns=parameter_name_columns, data=np.array(param_main_list).T)
+    df_main_effect['r'] = df_r_ref_locations['r']
+    return df_main_effect
+
+
+def plot_main_effects_2nd_level_DOE(df_amp_ratio_DOE_origninal, df_phase_diff_DOE_orignal, f_heating,
+                                    df_r_ref_locations, parameter_name_list):
+    df_main_effect_amp_ratio = main_effects_2_level_DOE(df_amp_ratio_DOE_origninal, f_heating, parameter_name_list,
+                                                        df_r_ref_locations)
+    df_main_effect_phase_diff = main_effects_2_level_DOE(df_phase_diff_DOE_orignal, f_heating, parameter_name_list,
+                                                         df_r_ref_locations)
+    parameter_name_columns = parameter_name_list.copy()
+    parameter_name_columns.remove('f_heating')
+
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(121)
+    for parameter_name in parameter_name_columns:
+        plt.scatter(df_main_effect_amp_ratio['r'], df_main_effect_amp_ratio[parameter_name], label=parameter_name)
+
+    plt.xlabel('R(pixel)', fontsize=12, fontweight='bold')
+    plt.ylabel('amplitude ratio main effect', fontsize=12, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+    plt.subplot(122)
+    for parameter_name in parameter_name_columns:
+        plt.scatter(df_main_effect_phase_diff['r'], df_main_effect_phase_diff[parameter_name], label=parameter_name)
+
+    plt.xlabel('R(pixel)', fontsize=12, fontweight='bold')
+    plt.ylabel('Phase difference main effect', fontsize=12, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+    plt.suptitle('DOE 2nd level factorial main effect, Frequency {} Hz'.format(f_heating), fontsize=14,
+                 fontweight='bold')  # or plt.suptitle('Main title')
+
+    plt.show()
+
+
+def interaction_effects_2_level_DOE(df_original, f_heating, parameter_name_list, df_r_ref_locations, ylim,
+                                    amp_or_phase):
+    df_DOE = df_original.query('f_heating == {}'.format(f_heating))
+    param_main_list = []
+    N_index = len(parameter_name_list)
+
+    dic_interaction = {}
+
+    parameter_name_columns = parameter_name_list.copy()
+    parameter_name_columns.remove('f_heating')
+
+    N_cols = len(parameter_name_columns)
+    N_rows = 1
+
+    f, axes = plt.subplots(N_rows, N_cols, figsize=(N_cols * 5, N_rows * 5))
+    j = 0
+
+    while (parameter_name_columns != []):
+
+        parameter_name_1 = parameter_name_columns.pop(0)
+        parameter_1_unique = np.unique(
+            df_DOE[parameter_name_1])  # calculated using Eq 4.4 on page 192, exp planning, analysis and opt
+
+        for parameter_name_2 in parameter_name_columns:
+            pair_name = parameter_name_1 + "_vs_" + parameter_name_2
+
+            parameter_2_unique = np.unique(df_DOE[parameter_name_2])
+
+            param_inter = 0.5 * (np.array(df_DOE.query(
+                '{}=={} and {}=={}'.format(parameter_name_1, parameter_1_unique[1], parameter_name_2,
+                                           parameter_2_unique[1])).iloc[:, N_index:].mean(
+                axis=0)) - np.array(df_DOE.query(
+                '{}=={} and {}=={}'.format(parameter_name_1, parameter_1_unique[0], parameter_name_2,
+                                           parameter_2_unique[1])).iloc[:, N_index:].mean(axis=0))
+                                 ) - 0.5 * (np.array(df_DOE.query(
+                '{}=={} and {}=={}'.format(parameter_name_1, parameter_1_unique[1], parameter_name_2,
+                                           parameter_2_unique[0])).iloc[:, N_index:].mean(
+                axis=0)) - np.array(df_DOE.query(
+                '{}=={} and {}=={}'.format(parameter_name_1, parameter_1_unique[0], parameter_name_2,
+                                           parameter_2_unique[0])).iloc[:, N_index:].mean(axis=0)))
+
+            dic_interaction[pair_name] = param_inter
+
+            axes[j].scatter(df_r_ref_locations['r'], param_inter, label="{}".format(parameter_name_2))
+
+        axes[j].set_xlabel("R (pixels)", fontweight='bold', fontsize=10)
+        axes[j].set_ylim(ylim)
+        axes[j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
+        axes[j].set_title(parameter_name_1)
+        axes[j].legend()
+
+        j += 1
+
+    df_interaction = pd.DataFrame(dic_interaction)
+    df_interaction['r'] = df_r_ref_locations['r']
+
+    plt.suptitle("{} 2nd level DOE interaction effect, frequency = {} Hz".format(amp_or_phase, f_heating),
+                 fontweight='bold', fontsize=14)
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    return df_interaction, f
+
 
 class MCMC_sampler:
 
