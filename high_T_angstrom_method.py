@@ -1456,7 +1456,7 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_tempera
 
 
 
-def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,jupyter_directory):
+def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,jupyter_directory, df_temperature,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting):
 
 
     DOE_parameters_complete = [one_factorial_design for one_factorial_design in full_factorial_combinations]
