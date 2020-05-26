@@ -75,7 +75,7 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
 
 def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
                              R_analysis,
-                             exp_amp_phase_extraction_method):
+                             exp_amp_phase_extraction_method,code_directory):
     # we basically break entire disk into 6 regions, with interval of pi/3
     fig = plt.figure(figsize=(18.3, 12))
     colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta']
@@ -90,7 +90,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
                                                                                [[60 * j, 60 * (j + 1)]],
                                                                                pr, path, rec_name, output_name, method,
-                                                                               num_cores)
+                                                                               num_cores,code_directory)
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
                                                                         exp_amp_phase_extraction_method)
         df_temperature_list.append(df_temperature)
@@ -155,7 +155,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
     plt.legend()
 
-    rep_csv_dump_path = "temperature cache dump//" + rec_name + '_rep_dump'
+    rep_csv_dump_path = code_directory+"temperature cache dump//" + rec_name + '_rep_dump'
     # rec_name
     if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
         print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
@@ -265,7 +265,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     ax.set_ylabel('T_mean (K)', fontsize=12, fontweight='bold')
     ax.set_title("Tmean vs R", fontsize=12, fontweight='bold')
 
-    plt.show()
+    #plt.show()
 
     amp_ratio_list = np.array([np.array(df_amp_phase_list[i]['amp_ratio']) for i in range(6)])
     phase_diff_list = np.array([np.array(df_amp_phase_list[i]['phase_diff']) for i in range(6)])
@@ -411,13 +411,13 @@ def radial_temperature_average_disk_sample_old(x0, y0, N_Rmax,theta_range, pr, p
 
 def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name,
                                                           output_name, method,
-                                                          num_cores):  # unit in K
+                                                          num_cores,code_directory):  # unit in K
     # path= "C://Users//NTRG lab//Desktop//yuan//"
     # rec_name = "Rec-000011_e63", this is the folder which contains all csv data files
     # note theta_range should be a 2D array [[0,pi/3],[pi/3*2,2pi]]
     df_temperature_list = []
     for theta_range in theta_range_list:
-        dump_file_path = "temperature cache dump//"+output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(theta_range[0]), int(theta_range[1]))
+        dump_file_path = code_directory+"temperature cache dump//"+output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(theta_range[0]), int(theta_range[1]))
 
         if (os.path.isfile(dump_file_path)):  # First check if a dump file exist:
             print('Found previous dump file :' + dump_file_path)
@@ -741,8 +741,11 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     absorptivity = sample_information['absorptivity']  # assumed to be constant
     sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
 
-    dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
-             1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
+    #print(N_cycle)
+    #print(f_heating)
+    dt = min(Fo_criteria * (dr ** 2) / (alpha_r), 1/f_heating/15)  # assume 15 samples per period, Fo_criteria default = 1/3
+
+
     t_total = 1 / f_heating * N_cycle  # total simulation time
 
     Nt = int(t_total / dt)  # total number of simulation time step
@@ -1079,7 +1082,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
 
     plt.tight_layout()
 
-    plt.show()
+   # plt.show()
 
     return fig, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean
 
@@ -1179,8 +1182,8 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
     return regression_result, diagnostic_figure, fig_regression,T_average,amp_residual_mean, phase_residual_mean,total_residual_mean
 
 
-def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores):
-    df_exp_condition_spreadsheet = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
+def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
+    df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
 
     diagnostic_figure_list = []
@@ -1219,7 +1222,7 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
         sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
                                                               num_cores,
                                                               f_heating, R0, gap, R_analysis,
-                                                              exp_amp_phase_extraction_method)
+                                                              exp_amp_phase_extraction_method,code_directory)
 
         diagnostic_figure_list.append(diagnostic_figure)
 
@@ -1238,7 +1241,7 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
             angle_range.append([int(element_before_comma), int(element_after_comma)])
 
         df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
-                                                                               rec_name, output_name, method, num_cores)
+                                                                               rec_name, output_name, method, num_cores,code_directory)
 
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
                                                                         exp_amp_phase_extraction_method)
@@ -1252,18 +1255,18 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
                                                   df_amplitude_phase_measurement_list[i]) for i in
         tqdm(range(len(df_exp_condition_spreadsheet))))
     # joblib_output
-    pickle.dump(joblib_output,open("result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
+    pickle.dump(joblib_output,open(code_directory+"result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
 
 
-def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename):
+def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,code_directory):
     regression_params = [joblib_output_[0] for joblib_output_ in joblib_output]
     T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
     amp_ratio_residual_list = [joblib_output_[4] for joblib_output_ in joblib_output]
     phase_diff_residual_list = [joblib_output_[5] for joblib_output_ in joblib_output]
     amp_phase_residual_list = [joblib_output_[6] for joblib_output_ in joblib_output]
 
-    df_exp_condition = pd.read_excel("batch process information//"+df_exp_condition_spreadsheet_filename)
+    df_exp_condition = pd.read_excel(code_directory+"batch process information//"+df_exp_condition_spreadsheet_filename)
 
     sigma_s_list = []
     alpha_list = []
@@ -1297,12 +1300,12 @@ def display_high_dimensional_regression_results(x_name, y_name, row_name, column
             # VDC_list = np.unique(df_results_all_['VDC'])
             for series in series_items:
                 df_ = df_results_all_.query("{}=={}".format(series_name, series))
-                axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {}".format(series_name, series))
+                axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
                 axes[i, j].set_xlabel(x_name)
                 axes[i, j].set_ylabel(y_name)
                 axes[i, j].set_ylim(ylim)
                 axes[i, j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-                axes[i, j].set_title("{} = {},{} = {}".format(row_name, row, column_name, column))
+                axes[i, j].set_title("{} = {:.1E},{} = {:.1E}".format(row_name, row, column_name, column))
     plt.tight_layout(h_pad=2)
     plt.legend()
 
@@ -1371,17 +1374,17 @@ def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_t
     print(e_time - s_time)
 
 
-def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, df_r_ref_locations):
+def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, df_r_ref_locations,calc_second_order):
     amp_ratio_results = np.array([np.array(parallel_result['amp_ratio']) for parallel_result in parallel_results])
     phase_diff_results = np.array([np.array(parallel_result['phase_diff']) for parallel_result in parallel_results])
 
     Si_amp_radius = np.array(
-        [sobol.analyze(sobol_problem, amp_ratio_results[:, i], calc_second_order=False, print_to_console=False)['S1']
+        [sobol.analyze(sobol_problem, amp_ratio_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
          for i in range(amp_ratio_results.shape[1])])
     # Just pay close attention that calc_second_order=False must be consistent with how X is defined!
 
     Si_phase_radius = np.array(
-        [sobol.analyze(sobol_problem, phase_diff_results[:, i], calc_second_order=False, print_to_console=False)['S1']
+        [sobol.analyze(sobol_problem, phase_diff_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
          for i in range(phase_diff_results.shape[1])])
 
     plt.figure(figsize=(14, 6))
@@ -1422,6 +1425,62 @@ def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, d
     plt.legend(prop={'weight': 'bold', 'size': 12})
     plt.show()
 
+
+def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_temperature, df_r_ref_locations,
+                                 sample_information, vacuum_chamber_setting, solar_simulator_settings,
+                                 light_source_property, numerical_simulation_setting):
+    for i, (parameter_name, DOE_parameter_value) in enumerate(zip(parameter_name_list, DOE_parameters)):
+        # print(parameter_name)
+        if parameter_name in sample_information.keys():
+            if parameter_name == 'emissivity':
+                sample_information['absorptivity'] = DOE_parameter_value
+            sample_information[parameter_name] = DOE_parameter_value
+        elif parameter_name in vacuum_chamber_setting.keys():
+            vacuum_chamber_setting[parameter_name] = DOE_parameter_value
+        elif parameter_name in numerical_simulation_setting.keys():
+            numerical_simulation_setting[parameter_name] = DOE_parameter_value
+        elif parameter_name in solar_simulator_settings.keys():
+            solar_simulator_settings[parameter_name] = DOE_parameter_value
+        elif parameter_name in light_source_property.keys():
+            light_source_property[parameter_name] = DOE_parameter_value
+
+    df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,
+                                                                                                     df_r_ref_locations,
+                                                                                                     sample_information,
+                                                                                                     vacuum_chamber_setting,
+                                                                                                     solar_simulator_settings,
+                                                                                                     light_source_property,
+                                                                                                     numerical_simulation_setting)
+
+    return df_amp_phase_simulated
+
+
+
+def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,jupyter_directory):
+
+
+    DOE_parameters_complete = [one_factorial_design for one_factorial_design in full_factorial_combinations]
+    result_dump_path = jupyter_directory+"//sensitivity cache dump//" + result_name
+    if (os.path.isfile(result_dump_path)):
+        print("Previous dump file existed, check if duplicate! The previous results are loaded.")
+        joblib_output = pickle.load(open(result_dump_path, 'rb'))
+    else:
+        joblib_output = Parallel(n_jobs=num_cores)(delayed(DOE_numerical_model_one_case)(parameter_name_list, DOE_parameters,df_temperature,df_r_ref_locations, sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting) for
+                                                  DOE_parameters in tqdm(DOE_parameters_complete))
+
+        pickle.dump(joblib_output, open(result_dump_path, "wb"))
+
+    df_run_conditions = pd.DataFrame(columns=parameter_name_list,data =DOE_parameters_complete)
+    amp_ratio_results = np.array([np.array(joblib_output_['amp_ratio']) for joblib_output_ in joblib_output])
+    phase_diff_results = np.array([np.array(joblib_output_['phase_diff']) for joblib_output_ in joblib_output])
+
+    df_results_amp_only = pd.DataFrame(columns=df_r_ref_locations['r'], data = amp_ratio_results)
+    df_results_phase_only = pd.DataFrame(columns=df_r_ref_locations['r'], data = phase_diff_results)
+
+    df_results_amp_ratio_complete = pd.concat([df_run_conditions,df_results_amp_only],axis = 1)
+    df_results_phase_difference_complete = pd.concat([df_run_conditions,df_results_phase_only],axis = 1)
+
+    return df_results_amp_ratio_complete, df_results_phase_difference_complete
 
 
 
