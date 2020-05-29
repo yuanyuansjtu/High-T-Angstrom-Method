@@ -36,6 +36,7 @@ from datetime import datetime
 # (1)result cache dump, results will be saved in this folder
 # (2)batch process information, the experimental condition spread sheet will be in this folder
 # (3)temperature cache dump, the radial averaged temperature picke file will be in this folder
+
 df_exp_condition_spreadsheet_filename = 'batch_process_batch_III_2_rec162_181_LB_Amax_low_variable_R0_T1_emissivity_sigma_s.xlsx'
 data_directory = "C://Users//yuan//Desktop//Amgstrom_method//temperature data//" # this is the directory to save csv files, note each experiment must have its own folder, for example Rec-0000X should be-> data directory + Rec-0000X+ //Rec-0000X_01.csv
 code_directory = "G://My Drive//Current Projects//Angstrom Method//High Temperature Simulation//Jupyter Notebook//"
@@ -49,4 +50,4 @@ joblib_output = pickle.load(open( code_directory+"result cache dump//regression_
 df_results_all = parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,code_directory)
 df_exp_condition_spreadsheet_filename_no_extension = df_exp_condition_spreadsheet_filename[:df_exp_condition_spreadsheet_filename.find(".")]
 
-df_results_all.to_csv(code_directory+"//result summary dataframe//"+"result_summary_dataframe_"+df_exp_condition_spreadsheet_filename_no_extension+".csv")
+df_results_all.to_csv(code_directory+"result summary dataframe//"+"result_summary_dataframe_"+df_exp_condition_spreadsheet_filename_no_extension+".csv")

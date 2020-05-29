@@ -43,11 +43,11 @@ code_directory = "G://My Drive//Current Projects//Angstrom Method//High Temperat
 
 num_cores = 8 # number of cores to run regression in parallel, note there is a num_core in the excel spreadsheet, it indicates the number of cores required to process the radial averaged temperture profile
 
-parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename,data_directory,num_cores,code_directory)
+#parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename,data_directory,num_cores,code_directory)
 
 joblib_output = pickle.load(open( code_directory+"result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, 'rb'))
 
 df_results_all = parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,code_directory)
 df_exp_condition_spreadsheet_filename_no_extension = df_exp_condition_spreadsheet_filename[:df_exp_condition_spreadsheet_filename.find(".")]
 
-df_results_all.to_csv(code_directory+"//result summary dataframe//"+"result_summary_dataframe_"+df_exp_condition_spreadsheet_filename_no_extension+".csv")
+df_results_all.to_csv(code_directory+"result summary dataframe//"+"result_summary_dataframe_"+df_exp_condition_spreadsheet_filename_no_extension+".csv")

@@ -1185,7 +1185,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
     df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
-
+    parallel_result_summary
     diagnostic_figure_list = []
     df_temperature_list = []
     df_amplitude_phase_measurement_list = []
@@ -1281,7 +1281,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,
 
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_list,
-                                   'regression_parameter':df_exp_condition['regression_result_type'],'T_sur1':df_exp_condition['T_sur1'],
+                                   'regression_parameter':df_exp_condition['regression_result_type'],'T_sur1':df_exp_condition['T_sur1'],'emissivity':df_exp_condition['emissivity'],
                                    'amp_res':amp_ratio_residual_list,'phase_res':phase_diff_residual_list,'amp_phase_res':amp_phase_residual_list})
     return df_results_all
 
