@@ -23,6 +23,81 @@ from scipy.optimize import minimize
 import matplotlib.ticker as mtick
 
 
+def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analysis):
+    fig = plt.figure(figsize=(13, 6))
+
+    df_first_frame = pd.read_csv(path + file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+    df_mid_frame = pd.read_csv(path + file_name_1, sep=',', header=None, names=list(np.arange(0, 639)))
+
+    df_mid_frame_temperature = df_mid_frame.iloc[5:, :]
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+
+    plt.subplot(121)
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 12)
+    plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.add_artist(circle1)
+    ax.add_artist(circle2)
+
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title("One Frame", fontsize=12, fontweight='bold')
+
+    plt.subplot(122)
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_mid_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 12)
+    plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.add_artist(circle1)
+    ax.add_artist(circle2)
+
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title("Another Frame", fontsize=12, fontweight='bold')
+
+    plt.show()
+
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
