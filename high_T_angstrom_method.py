@@ -22,6 +22,7 @@ from scipy.stats import multivariate_normal
 #from scipy.optimize import minimize
 from scipy import optimize
 import matplotlib.ticker as mtick
+from scipy.interpolate import interp1d
 
 
 def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analysis):
@@ -1176,25 +1177,21 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
     return fig, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean
 
 
-def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic_figure,df_temperature,df_amplitude_phase_measurement):
+def high_T_Angstrom_execute_one_case(df_exp_condition,df_sample_solar_simulator, data_directory,diagnostic_figure,df_temperature,df_amplitude_phase_measurement):
     #this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
-    path = data_directory + str(rec_name) + "//"
 
+    path = data_directory + str(rec_name) + "//"
     output_name = rec_name
     num_cores = df_exp_condition['num_cores']
-
     method = df_exp_condition['average_method']  # indicate Mosfata's code
-    # print(method)
-
     x0 = df_exp_condition['x0']  # in pixels
     y0 = df_exp_condition['y0']  # in pixels
     Rmax = df_exp_condition['Rmax']  # in pixels
     # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
     pr = df_exp_condition['pr']
     # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
-
     # After obtaining temperature profile, next we obtain amplitude and phase
     f_heating = df_exp_condition['f_heating']
     # 1cm ->35
@@ -1203,14 +1200,10 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
     # Rmax = 125
     R_analysis = df_exp_condition['R_analysis']
     exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
-    # df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature,f_heating,R0,gap,R_analysis,'fft')
-
-    # sum_std, fig_symmetry = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method, num_cores,
-    #                                                  f_heating, R0, gap, R_analysis,
-    #                                                  exp_amp_phase_extraction_method)
-    # print(sum_std)
-
     regression_method = df_exp_condition['regression_method']
+
+
+
     regression_module = df_exp_condition['regression_module']
 
     sample_information = {'R': df_exp_condition['R'], 't_z': df_exp_condition['t_z'], 'rho': df_exp_condition['rho'],
@@ -1318,6 +1311,120 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory,diagnostic
 
     print("recording {} completed.".format(rec_name))
     return regression_result, diagnostic_figure, fig_regression,T_average,amp_residual_mean, phase_residual_mean,total_residual_mean
+
+
+def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_directory, diagnostic_figure,
+                                     df_temperature, df_amplitude_phase_measurement):
+    # this is an excel file that contains sample's basic thermal properties and solar simulator characteristics
+
+    df_sample_cp_rho_alpha_all = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                               sheet_name="sample properties")
+    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="solar simulator Lorentzian")
+
+    df_solar_simulator_VI = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                          sheet_name="solar simulator VI")
+    sample_name = df_exp_condition['sample_name']
+    df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
+
+    # this function read a row from an excel spread sheet and execute
+
+    rec_name = df_exp_condition['rec_name']
+
+
+    regression_module = df_exp_condition['regression_module']
+
+    sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
+                          'rho': df_sample_cp_rho_alpha['rho'][0],
+                          'cp_const': df_sample_cp_rho_alpha['cp_const'][0], 'cp_c1':
+                              df_sample_cp_rho_alpha['cp_c1'][0], 'cp_c2': df_sample_cp_rho_alpha['cp_c2'][0],
+                          'cp_c3': df_sample_cp_rho_alpha['cp_c3'][0], 'alpha_r': df_sample_cp_rho_alpha['alpha_r'][0],
+                          'alpha_z': df_sample_cp_rho_alpha['alpha_z'][0], 'T_initial': None,
+                          'emissivity': df_exp_condition['emissivity'],
+                          'absorptivity': df_exp_condition['absorptivity']}
+    # sample_information
+    vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
+                              'T_sur1': float(df_exp_condition['T_sur1']), 'T_sur2': float(df_exp_condition['T_sur2'])}
+    # vacuum_chamber_setting
+
+    numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
+                                    'equal_grid': df_exp_condition['equal_grid'],
+                                    'N_cycle': int(df_exp_condition['N_cycle']),
+                                    'vectorize': True,
+                                    'Fo_criteria': float(df_exp_condition['Fo_criteria']),
+                                    'frequency_analysis_method': df_exp_condition['frequency_analysis_method'],
+                                    'gap': int(df_exp_condition['gap']),
+                                    'regression_module': df_exp_condition['regression_module'],
+                                    'regression_method': df_exp_condition['regression_method'],
+                                    'regression_result_type': df_exp_condition['regression_result_type'],
+                                    'regression_residual_converging_criteria': df_exp_condition[
+                                        'regression_residual_converging_criteria']
+                                    }
+    # the code is executed using vectorized approach by default
+
+    # numerical_simulation_setting
+    focal_shift = df_exp_condition['focal_shift(cm)']
+
+    locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
+    Amax_relative_focal_plane = df_solar_simulator_lorentzian['Amax']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
+
+    f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
+    f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='cubic')
+
+    solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
+                                'V_amplitude': float(df_exp_condition['V_amplitude']),
+                                'V_DC': float(df_exp_condition['V_DC']), 'rec_name': df_exp_condition['rec_name']}
+    # solar_simulator_settings
+    light_source_property = {'ks': float(df_solar_simulator_VI['ks']), 'bs': float(df_solar_simulator_VI['bs']),
+                             'ka': float(df_solar_simulator_VI['ka']),
+                             'ba': float(df_solar_simulator_VI['ba']), 'Amax': f_Amax(focal_shift),
+                             'sigma_s': f_sigma(focal_shift)}
+    # light_source_property
+
+    regression_result = None
+
+    if regression_module == 'lmfit':
+
+        params = Parameters()
+
+        if df_exp_condition['regression_result_type'] == 'alpha_r':
+            params.add('alpha_r', value=float(df_exp_condition['p_initial']), min=0.0)
+
+            out = lmfit.minimize(residual_update, params, args=(
+            df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+            solar_simulator_settings, light_source_property, numerical_simulation_setting),
+                                 xtol=df_exp_condition['regression_residual_converging_criteria'])
+
+            regression_result = out.params['alpha_r'].value
+
+        elif df_exp_condition['regression_result_type'] == 'sigma_s':
+            params.add('sigma_s', value=float(df_exp_condition['p_initial']), min=0.0)
+
+            out = lmfit.minimize(residual_update, params, args=(
+            df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+            solar_simulator_settings, light_source_property, numerical_simulation_setting),
+                                 xtol=df_exp_condition['regression_residual_converging_criteria'])
+
+            regression_result = out.params['sigma_s'].value
+
+    elif regression_module == 'scipy.optimize-NM':
+
+        res = optimize.minimize(residual_update, x0=float(df_exp_condition['p_initial']), args=(
+            df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+            solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead',
+                                tol=df_exp_condition['regression_residual_converging_criteria'])
+        regression_result = res['final_simplex'][0][0][0]
+
+    fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean = show_regression_results(
+        df_exp_condition['regression_result_type'], regression_result, df_temperature,
+        df_amplitude_phase_measurement, sample_information,
+        vacuum_chamber_setting, solar_simulator_settings,
+        light_source_property,
+        numerical_simulation_setting)
+
+    print("recording {} completed.".format(rec_name))
+    return regression_result, diagnostic_figure, fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean
 
 
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
