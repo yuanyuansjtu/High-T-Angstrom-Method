@@ -1445,7 +1445,7 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
         output_name = rec_name
         # num_cores = df_exp_condition['num_cores']
 
-        method = df_exp_condition['average_method']  # default uses Mosfata's code
+        method = "MA"  # default uses Mosfata's code
         # print(method)
 
         x0 = df_exp_condition['x0']  # in pixels
