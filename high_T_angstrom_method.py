@@ -103,6 +103,7 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
+
     df_raw = pd.read_csv(file_name, sep=',', header=None, names=list(np.arange(0, 639)))
     raw_time_string = df_raw.iloc[2, 0][df_raw.iloc[2, 0].find('=') + 2:]  # '073:02:19:35.160000'
 
@@ -130,7 +131,7 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     for i in range(Rmax):  # Looping through all radial points
         for j, theta_ in enumerate(theta):  # Looping through all angular points
             y = i * np.sin(theta_) + y0;
-            x = i * np.cos(theta_) + x0  # Identifying the spatial 2D cartesian coordinates
+            x = i * np.cos(theta_) + x0;  # Identifying the spatial 2D cartesian coordinates
             y1 = int(np.floor(y));
             y2 = y1 + 1;
             x1 = int(np.floor(x));
@@ -150,24 +151,99 @@ def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): 
     return T_interpolate, time_in_seconds
 
 
+def select_data_points_radial_average_MA_vectorized(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
+    # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
+    df_raw = pd.read_csv(file_name, nrows=3, header = None)
+    raw_time_string = df_raw.iloc[2, 0][df_raw.iloc[2, 0].find('=') + 2:]  # '073:02:19:35.160000'
+
+    # print(raw_time_string)
+    day_info = int(raw_time_string[:raw_time_string.find(":")])
+    raw_time_string = raw_time_string[raw_time_string.find(":") + 1:]  # '02:19:35.160000'
+    # print(day_info)
+    strip_time = datetime.strptime(raw_time_string, '%H:%M:%S.%f')
+    # print(raw_time_string)
+    time_in_seconds = day_info * 24 * 3600 + strip_time.hour * 3600 + strip_time.minute * 60 + strip_time.second + strip_time.microsecond / 10 ** 6
+    # print(time_in_seconds)
+
+    theta_min = theta_range[0]*np.pi/180
+    theta_max = theta_range[1]*np.pi/180
+
+    theta_n = int(abs(theta_max-theta_min)/(2*np.pi)*180) # previous studies have shown that 2Pi requires above 100 theta points to yield accurate results
+
+    theta = np.linspace(theta_min, theta_max, theta_n)  # The angles 1D array (rad)
+
+    Tr = np.zeros((Rmax, theta_n))
+
+    df_temp_one_frame = pd.read_csv(file_name, skiprows=5,header = None)
+    arr_temp = df_temp_one_frame.to_numpy()
+    R_pixel = np.array([j for j in range(Rmax)])
+
+    for j, theta_ in enumerate(theta):
+        X = R_pixel * np.cos(theta_) + x0
+        Y = R_pixel * np.sin(theta_) + y0
+
+        Y1 = np.array(np.floor(Y), dtype=int)
+        Y2 = Y1 + 1
+        X1 = np.array(np.floor(X), dtype=int)
+        X2 = X1 + 1
+
+        dy1 = (Y2 - Y) / (Y2 - Y1)
+        dy2 = (Y - Y1) / (Y2 - Y1)  # Identifying the corresponding weights for the y-coordinates
+        dx1 = (X2 - X) / (X2 - X1)
+        dx2 = (X - X1) / (X2 - X1) # Identifying the corresponding weights for the x-coordinates
+
+        T11 = arr_temp[(Y1, X1)]
+        T21 = arr_temp[(Y2, X1)]
+        T12 = arr_temp[(Y1, X2)]
+        T22 = arr_temp[(Y2, X2)]
+
+        Tr[:, j] = dx1 * dy1 * T11 + dx1 * dy2 * T21 + dx2 * dy1 * T12 + dx2 * dy2 * T22 + 273.15
+
+    T_interpolate_vectorize = np.mean(Tr, axis=1)
+
+    #T_interpolate = np.mean(Tr, axis=1)
+
+    return T_interpolate_vectorize, time_in_seconds
+
+
+
 def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
-                             R_analysis,
-                             exp_amp_phase_extraction_method,code_directory):
+                             R_analysis, angle_range, exp_amp_phase_extraction_method,code_directory):
     # we basically break entire disk into 6 regions, with interval of pi/3
     fig = plt.figure(figsize=(18.3, 12))
-    colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta']
+    colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta','brown','yellow']
 
     df_temperature_list = []
     df_amp_phase_list = []
 
     plt.subplot(231)
 
-    for j in range(6):
-        # note radial_temperature_average_disk_sample automatically checks if a dump file exist
-        df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
-                                                                               [[60 * j, 60 * (j + 1)]],
-                                                                               pr, path, rec_name, output_name, method,
-                                                                               num_cores,code_directory)
+
+    # for j,angle in enumerate(angle_range):
+    #     # note radial_temperature_average_disk_sample automatically checks if a dump file exist
+    #     df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
+    #                                                                            [angle],
+    #                                                                            pr, path, rec_name, output_name, method, num_cores,code_directory)
+    #
+    #
+    #     df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
+    #                                                                     exp_amp_phase_extraction_method)
+    #     df_temperature_list.append(df_temperature)
+    #     df_amp_phase_list.append(df_amplitude_phase_measurement)
+    #
+    #     plt.scatter(df_amplitude_phase_measurement['r'],
+    #                 df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
+    #                 s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+
+
+
+    df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,angle_range,pr, path,
+                                                                                                         rec_name, output_name, method, num_cores,code_directory)
+
+    for j, angle in enumerate(angle_range):
+    # note radial_temperature_average_disk_sample automatically checks if a dump file exist
+        df_temperature = df_temperature_list[j]
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
                                                                         exp_amp_phase_extraction_method)
         df_temperature_list.append(df_temperature)
@@ -175,7 +251,9 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
         plt.scatter(df_amplitude_phase_measurement['r'],
                     df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
-                    s=60, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
         tick.label.set_fontsize(fontsize=10)
@@ -191,12 +269,14 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.subplot(232)
 
-    for j in range(6):
+
+    for j, angle in enumerate(angle_range):
         df_temperature = df_temperature_list[j]
         df_amplitude_phase_measurement = df_amp_phase_list[j]
         plt.scatter(df_amplitude_phase_measurement['r'],
                     df_amplitude_phase_measurement['phase_diff'], facecolors='none',
-                    s=60, linewidths=2, edgecolor=colors[j], label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
         tick.label.set_fontsize(fontsize=10)
@@ -212,13 +292,16 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.subplot(233)
 
-    for j in range(6):
+    for j, angle in enumerate(angle_range):
         df_temperature = df_temperature_list[j]
         time_max = 10 * 1 / f_heating  # only show 10 cycles
         df_temperature = df_temperature.query('reltime<{:.2f}'.format(time_max))
+
         plt.plot(df_temperature['reltime'],
-                 df_temperature.iloc[:, R0], linewidth=2, color=colors[j],
-                 label=str(60 * j) + ' to ' + str(60 * (j + 1)) + ' Degs')
+                 df_temperature.iloc[:, R0], linewidth=2, color=colors[j],label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+
+
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
         tick.label.set_fontsize(fontsize=10)
@@ -251,7 +334,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
         df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
 
-        N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
+        #N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
+        N_mid = 20
         file_name_1 = [path + x for x in os.listdir(path)][N_mid]
         n2 = file_name_1.rfind('//')
         n3 = file_name_1.rfind('.csv')
@@ -287,17 +371,31 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
+    R_angle_show = R0 + R_analysis
+
+
     circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
     circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01/pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+
 
     ax.invert_yaxis()
     ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
     ax.add_artist(circle1)
     ax.add_artist(circle2)
+    ax.add_artist(circle3)
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
     ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
+                            y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
+        plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
+                            y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
 
     plt.subplot(235)
 
@@ -311,41 +409,65 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     X, Y = np.meshgrid(x, y)
 
     # mid = int(np.shape(Z)[1] / 2)
-    x3 = min(30, R_analysis - 10)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
 
-    manual_locations = [(x0 - 5, y0 - 5), (x0 - 15, y0 - 15), (x0 - x3, y0 - x3)]
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
     # fig, ax = plt.subplots(figsize=(6, 6))
     ax = plt.gca()
     CS = ax.contour(X, Y, Z, 12)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
+    R_angle_show = R0 + R_analysis
+
+
     circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
     circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01/pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+
 
     ax.invert_yaxis()
     ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
     ax.add_artist(circle1)
     ax.add_artist(circle2)
+    ax.add_artist(circle3)
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
     ax.set_title(frame_num_mid, fontsize=12, fontweight='bold')
 
+    for j, angle in enumerate(angle_range):
+        plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
+                            y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
+        plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
+                            y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
+
+
     plt.subplot(236)
     T_mean_list = np.array(
         [np.array(df_temperature.iloc[:, R0:R0 + R_analysis].mean(axis=0)) for df_temperature in df_temperature_list])
+    T_max_list = np.array(
+        [np.array(df_temperature.iloc[:, R0:R0 + R_analysis].max(axis=0)) for df_temperature in df_temperature_list])
+    T_min_list = np.array(
+        [np.array(df_temperature.iloc[:, R0:R0 + R_analysis].min(axis=0)) for df_temperature in df_temperature_list])
 
-    plt.plot(np.arange(R0, R0 + R_analysis), T_mean_list.mean(axis=0), linewidth=2)
+    plt.plot(np.arange(R0, R0 + R_analysis), T_mean_list.mean(axis=0), linewidth=2,label = "mean temperature")
+    plt.plot(np.arange(R0, R0 + R_analysis), T_max_list.mean(axis=0), linewidth=2,label = "max temperature")
+    plt.plot(np.arange(R0, R0 + R_analysis), T_min_list.mean(axis=0), linewidth=2,label = "min temperature")
+
     ax = plt.gca()
     ax.set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('T_mean (K)', fontsize=12, fontweight='bold')
-    ax.set_title("Tmean vs R", fontsize=12, fontweight='bold')
+    ax.set_ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+    plt.legend()
+
+    #ax.set_title("Temperature vs R", fontsize=12, fontweight='bold')
 
     #plt.show()
 
-    amp_ratio_list = np.array([np.array(df_amp_phase_list[i]['amp_ratio']) for i in range(6)])
-    phase_diff_list = np.array([np.array(df_amp_phase_list[i]['phase_diff']) for i in range(6)])
+    amp_ratio_list = np.array([np.array(df_amp_phase_list[i]['amp_ratio']) for i in range(len(angle_range))])
+    phase_diff_list = np.array([np.array(df_amp_phase_list[i]['phase_diff']) for i in range(len(angle_range))])
     weight = np.linspace(1, 0.6, len(np.std(amp_ratio_list, axis=0)))
     amp_std = np.std(amp_ratio_list, axis=0)
     phase_std = np.std(phase_diff_list, axis=0)
@@ -439,6 +561,7 @@ def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_
     # path= "C://Users//NTRG lab//Desktop//yuan//"
     # rec_name = "Rec-000011_e63", this is the folder which contains all csv data files
     # note theta_range should be a 2D array [[0,pi/3],[pi/3*2,2pi]]
+    ##print(theta_range_list)
     df_temperature_list = []
     for theta_range in theta_range_list:
         dump_file_path = code_directory+"temperature cache dump//"+output_name + '_x0_{}_y0_{}_Rmax_{}_method_{}_theta_{}_{}'.format(x0, y0, N_Rmax, method, int(theta_range[0]), int(theta_range[1]))
@@ -455,10 +578,8 @@ def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_
             if method == 'MA':  # default method, this one is much faster
                 theta_n = 100  # default theta_n=100, however, if R increased significantly theta_n should also increase
                 # joblib_output = Parallel(n_jobs=num_cores)(delayed(select_data_points_radial_average_MA)(x0,y0,Rmax,theta_n,file_name) for file_name in tqdm(file_names))
-                joblib_output = Parallel(n_jobs=num_cores)(
-                    delayed(select_data_points_radial_average_MA)(x0, y0, N_Rmax, theta_range, file_name) for file_name
-                    in
-                    tqdm(file_names))
+                #joblib_output = Parallel(n_jobs=num_cores)(delayed(select_data_points_radial_average_MA)(x0, y0, N_Rmax, theta_range, file_name) for file_name in tqdm(file_names))
+                joblib_output = Parallel(n_jobs=num_cores)(delayed(select_data_points_radial_average_MA_vectorized)(x0, y0, N_Rmax, theta_range, file_name) for file_name in tqdm(file_names))
 
             else:
                 joblib_output = Parallel(n_jobs=num_cores)(
@@ -484,17 +605,19 @@ def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_
         temp_data = np.array(temp_profile)
         time_data = time_series - min(time_series)  # such that time start from zero
 
-        df_temperature = pd.DataFrame(
-            data=temp_data)  # return a dataframe containing radial averaged temperature and relative time
+        df_temperature = pd.DataFrame(data=temp_data)  # return a dataframe containing radial averaged temperature and relative time
         df_temperature['reltime'] = time_data
+
         df_temperature_list.append(df_temperature)
+
+
 
     cols = df_temperature_list[0].columns
     data = np.array([np.array(df_temperature_list_.iloc[:, :]) for df_temperature_list_ in df_temperature_list])
     data_mean = np.mean(data, axis=0)
     df_averaged_temperature = pd.DataFrame(data=data_mean, columns=cols)
 
-    return df_averaged_temperature  # note the column i of the df_temperature indicate the temperature in pixel i
+    return df_temperature_list, df_averaged_temperature  # note the column i of the df_temperature indicate the temperature in pixel i
 
 
 def sin_func(t, amplitude, phase, bias, f_heating):
@@ -728,6 +851,20 @@ def light_source_intensity_vecterize(r_array, t_array, N_Rs, solar_simulator_set
 
     return q
 
+def lorentzian_Amax_sigma_estimation(d,code_directory):
+
+    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="solar simulator Lorentzian")
+
+    locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
+    Amax_relative_focal_plane = df_solar_simulator_lorentzian['Amax']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
+
+    f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
+    f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='cubic')
+
+    return f_Amax(d), f_sigma(d)
+
 
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting):
@@ -869,9 +1006,9 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
 
-    print('alpha_r = {:.2E}, sigma_s = {:.2E}, f_heating = {}, dt = {:.2E}, Nr = {}, Nt = {}, Fo_r = {:.2E}, R0 = {}'.format(alpha_r,light_source_property['sigma_s'],f_heating, dt, Nr, Nt,Fo_r,R0))
+    print('alpha_r = {:.2E}, Amax = {:.2E}, sigma_s = {:.2E}, f_heating = {}, Rec = {}.'.format(alpha_r, light_source_property['Amax'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name']))
 
-    return T[:time_index], time_simulation[:time_index], r,N_one_cycle
+    return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
 
 def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_phase_measurement, sample_information,
@@ -1429,13 +1566,13 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     return regression_result, diagnostic_figure, fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean
 
 
-def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
+def parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
     df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
-    # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
-    parallel_result_summary
+
     diagnostic_figure_list = []
     df_temperature_list = []
     df_amplitude_phase_measurement_list = []
+
 
     for i in range(len(df_exp_condition_spreadsheet)):
 
@@ -1466,18 +1603,8 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
         R_analysis = df_exp_condition['R_analysis']
         exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
 
-        sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
-                                                              num_cores,
-                                                              f_heating, R0, gap, R_analysis,
-                                                              exp_amp_phase_extraction_method,code_directory)
-
-        regression_method = df_exp_condition['regression_method']
-        regression_module = df_exp_condition['regression_module'] # lmfit and scipy.optimize, these modules requires different return from residual function
-
-        diagnostic_figure_list.append(diagnostic_figure)
-
         bb = df_exp_condition['anguler_range']
-        bb = bb[1:-1]
+        bb = bb[1:-1] # reac_excel read an element as an array
         index = None
         angle_range = []
         while (index != -1):
@@ -1488,9 +1615,15 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
             element_before_comma = element[element.find("[") + 1:d]
             # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
             bb = bb[index + 2:]
-            angle_range.append([int(element_before_comma), int(element_after_comma)])
+            angle_range.append([int(element_before_comma),int(element_after_comma)])
 
-        df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
+        sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
+                                                              num_cores, f_heating, R0, gap, R_analysis,angle_range,
+                                                              exp_amp_phase_extraction_method,code_directory)
+
+        diagnostic_figure_list.append(diagnostic_figure)
+
+        df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
                                                                                rec_name, output_name, method, num_cores,code_directory)
 
         df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
@@ -1498,14 +1631,101 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
         df_temperature_list.append(df_temperature)
         df_amplitude_phase_measurement_list.append(df_amplitude_phase_measurement)
 
+
+    return diagnostic_figure_list,df_temperature_list, df_amplitude_phase_measurement_list
+
+def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
+    df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
+
+
+
+
+    # parallel_result_summary
+    # diagnostic_figure_list = []
+    # df_temperature_list = []
+    # df_amplitude_phase_measurement_list = []
+    #
+    # for i in range(len(df_exp_condition_spreadsheet)):
+    #
+    #     df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+    #
+    #     rec_name = df_exp_condition['rec_name']
+    #     path = data_directory + str(rec_name) + "//"
+    #
+    #     output_name = rec_name
+    #     # num_cores = df_exp_condition['num_cores']
+    #
+    #     method = "MA"  # default uses Mosfata's code
+    #     # print(method)
+    #
+    #     x0 = df_exp_condition['x0']  # in pixels
+    #     y0 = df_exp_condition['y0']  # in pixels
+    #     Rmax = df_exp_condition['Rmax']  # in pixels
+    #     # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
+    #     pr = df_exp_condition['pr']
+    #     # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
+    #
+    #     # After obtaining temperature profile, next we obtain amplitude and phase
+    #     f_heating = df_exp_condition['f_heating']
+    #     # 1cm ->35
+    #     R0 = df_exp_condition['R0']
+    #     gap = df_exp_condition['gap']
+    #     # Rmax = 125
+    #     R_analysis = df_exp_condition['R_analysis']
+    #     exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
+    #
+    #     bb = df_exp_condition['anguler_range']
+    #     bb = bb[1:-1] # reac_excel read an element as an array
+    #     index = None
+    #     angle_range = []
+    #     while (index != -1):
+    #         index = bb.find("],[")
+    #         element = bb[:index]
+    #         d = element.find(",")
+    #         element_after_comma = element[d + 1:]
+    #         element_before_comma = element[element.find("[") + 1:d]
+    #         # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
+    #         bb = bb[index + 2:]
+    #         angle_range.append([int(element_before_comma),int(element_after_comma)])
+    #
+    #
+    #
+    #     sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
+    #                                                           num_cores, f_heating, R0, gap, R_analysis,angle_range,
+    #                                                           exp_amp_phase_extraction_method,code_directory)
+    #
+    #
+    #
+    #     regression_method = df_exp_condition['regression_method']
+    #     regression_module = df_exp_condition['regression_module'] # lmfit and scipy.optimize, these modules requires different return from residual function
+    #
+    #     diagnostic_figure_list.append(diagnostic_figure)
+    #
+    #     df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
+    #                                                                            rec_name, output_name, method, num_cores,code_directory)
+    #
+    #     # radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name, output_name, method, num_cores, code_directory):  # unit in K
+    #
+    #     df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
+    #                                                                     exp_amp_phase_extraction_method)
+    #     df_temperature_list.append(df_temperature)
+    #     df_amplitude_phase_measurement_list.append(df_amplitude_phase_measurement)
+
     # regression_result, diagnostic_figure, regression_figure, sum_std,T_average = high_T_Angstrom_execute_one_case(df_exp_condition,data_directory)
+
+    diagnostic_figure_list, df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
+
     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
         delayed(high_T_Angstrom_execute_one_case)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,code_directory,
                                                   diagnostic_figure_list[i], df_temperature_list[i],
                                                   df_amplitude_phase_measurement_list[i]) for i in
         tqdm(range(len(df_exp_condition_spreadsheet))))
-    # joblib_output
+
     pickle.dump(joblib_output,open(code_directory+"result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
+
+
 
 
 
@@ -1516,7 +1736,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,
     phase_diff_residual_list = [joblib_output_[5] for joblib_output_ in joblib_output]
     amp_phase_residual_list = [joblib_output_[6] for joblib_output_ in joblib_output]
 
-    df_exp_condition = pd.read_excel(code_directory+"batch process information//"+df_exp_condition_spreadsheet_filename)
+    df_exp_condition = pd.read_excel(df_exp_condition_spreadsheet_filename)
 
     sigma_s_list = []
     alpha_list = []
