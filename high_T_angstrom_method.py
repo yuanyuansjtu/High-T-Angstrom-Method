@@ -219,24 +219,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     plt.subplot(231)
 
 
-    # for j,angle in enumerate(angle_range):
-    #     # note radial_temperature_average_disk_sample automatically checks if a dump file exist
-    #     df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
-    #                                                                            [angle],
-    #                                                                            pr, path, rec_name, output_name, method, num_cores,code_directory)
-    #
-    #
-    #     df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
-    #                                                                     exp_amp_phase_extraction_method)
-    #     df_temperature_list.append(df_temperature)
-    #     df_amp_phase_list.append(df_amplitude_phase_measurement)
-    #
-    #     plt.scatter(df_amplitude_phase_measurement['r'],
-    #                 df_amplitude_phase_measurement['amp_ratio'], facecolors='none',
-    #                 s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
-
-
-
 
     df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,angle_range,pr, path,
                                                                                                          rec_name, output_name, method, num_cores,code_directory)
@@ -394,8 +376,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     for j, angle in enumerate(angle_range):
         plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
                             y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
-        plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
-                            y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
+        # plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
+        #                     y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
 
     plt.subplot(235)
 
@@ -441,8 +423,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     for j, angle in enumerate(angle_range):
         plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
                             y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
-        plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
-                            y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
+        # plt.plot([x0, x0 + R_angle_show * np.cos(angle[1] * np.pi / 180)], [y0,
+        #                     y0 + R_angle_show * np.sin(angle[1] * np.pi / 180)], ls='dotted', color='blue', lw=2)
 
 
     plt.subplot(236)
@@ -957,8 +939,12 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                     N_steady_count += 1
                     if N_steady_count == 2: # only need 2 periods to calculate amplitude and phase
                         time_index = p
+                        print("stable temperature profile has been obtained @ iteration N= {}!".format(int(p/N_one_cycle)))
                         break
                 T_temp = T[p, :]
+
+            if p == Nt-2:
+                print("Error! No stable temperature profile was obtained!")
     else:
         q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
         time_index = Nt - 1
@@ -1034,7 +1020,7 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
     gap = numerical_simulation_setting['gap']
 
     # I want max 400 samples per period
-    N_skip_time = int(N_one_cycle / 400)
+    N_skip_time = max(int(N_one_cycle / 400),1) # avoid N_skip to be zero
 
     df_temperature_simulation = pd.DataFrame(data=T_[-2*N_one_cycle::N_skip_time,:])  # return a dataframe containing radial averaged temperature and relative time
     df_temperature_simulation['reltime'] = time_T_[-2*N_one_cycle::N_skip_time]
@@ -1119,69 +1105,6 @@ def residual_update(params, df_temperature,df_amplitude_phase_measurement, sampl
     return error
 
 
-
-# def residual(params, df_temperature,df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#              solar_simulator_settings, light_source_property, numerical_simulation_setting):
-#     sample_information['alpha_r'] = params[0]
-#
-#     df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_temperature,df_amplitude_phase_measurement,
-#                                                                           sample_information, vacuum_chamber_setting,
-#                                                                           solar_simulator_settings,
-#                                                                           light_source_property,
-#                                                                           numerical_simulation_setting)
-#
-#     phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
-#     amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                                 zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
-#
-#     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
-
-
-
-
-#
-# def residual_alpha_solar(params,df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#              solar_simulator_settings, light_source_property, numerical_simulation_setting):
-#
-#     sample_information['alpha_r'] = params[0]
-#     light_source_property['sigma_s'] = params[1]
-#
-#     df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_phase_measurement,
-#                                                                           sample_information, vacuum_chamber_setting,
-#                                                                           solar_simulator_settings,
-#                                                                           light_source_property,
-#                                                                           numerical_simulation_setting)
-#
-#     phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
-#     amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                                 zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
-#
-#     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
-
-
-
-#
-#
-# def residual_solar(params, df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#              solar_simulator_settings, light_source_property, numerical_simulation_setting):
-#
-#     #sample_information['alpha_r'] = params[0]
-#     light_source_property['sigma_s'] = params[0]
-#
-#     df_amp_phase_simulated,df_temperature_simulation= simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_phase_measurement,
-#                                                                           sample_information, vacuum_chamber_setting,
-#                                                                           solar_simulator_settings,
-#                                                                           light_source_property,
-#                                                                           numerical_simulation_setting)
-#
-#     phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
-#     amplitude_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
-#                                 zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])]
-#
-#     return np.sum(amplitude_relative_error) + np.sum(phase_relative_error)
 
 
 def show_regression_results(param_name, regression_result, df_temperature, df_amplitude_phase_measurement,
@@ -1312,142 +1235,6 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
    # plt.show()
 
     return fig, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean
-
-
-# def high_T_Angstrom_execute_one_case(df_exp_condition,df_sample_solar_simulator, data_directory,diagnostic_figure,df_temperature,df_amplitude_phase_measurement):
-#     #this function read a row from an excel spread sheet and execute
-#
-#     rec_name = df_exp_condition['rec_name']
-#
-#     path = data_directory + str(rec_name) + "//"
-#     output_name = rec_name
-#     num_cores = df_exp_condition['num_cores']
-#     method = df_exp_condition['average_method']  # indicate Mosfata's code
-#     x0 = df_exp_condition['x0']  # in pixels
-#     y0 = df_exp_condition['y0']  # in pixels
-#     Rmax = df_exp_condition['Rmax']  # in pixels
-#     # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
-#     pr = df_exp_condition['pr']
-#     # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
-#     # After obtaining temperature profile, next we obtain amplitude and phase
-#     f_heating = df_exp_condition['f_heating']
-#     # 1cm ->35
-#     R0 = df_exp_condition['R0']
-#     gap = df_exp_condition['gap']
-#     # Rmax = 125
-#     R_analysis = df_exp_condition['R_analysis']
-#     exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
-#     regression_method = df_exp_condition['regression_method']
-#
-#
-#
-#     regression_module = df_exp_condition['regression_module']
-#
-#     sample_information = {'R': df_exp_condition['R'], 't_z': df_exp_condition['t_z'], 'rho': df_exp_condition['rho'],
-#                           'cp_const': df_exp_condition['cp_const'], 'cp_c1':
-#                               df_exp_condition['cp_c1'], 'cp_c2': df_exp_condition['cp_c2'],
-#                           'cp_c3': df_exp_condition['cp_c3'], 'alpha_r': df_exp_condition['alpha_r'],
-#                           'alpha_z': df_exp_condition['alpha_z'], 'T_initial': df_exp_condition['T_initial'],
-#                           'emissivity': df_exp_condition['emissivity'],
-#                           'absorptivity': df_exp_condition['absorptivity']}
-#     # sample_information
-#     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
-#                               'T_sur1': float(df_exp_condition['T_sur1']), 'T_sur2': float(df_exp_condition['T_sur2'])}
-#     # vacuum_chamber_setting
-#
-#     numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
-#                                     'equal_grid': df_exp_condition['equal_grid'],
-#                                     'N_cycle': int(df_exp_condition['N_cycle']),
-#                                     'vectorize': df_exp_condition['vectorize'],
-#                                     'Fo_criteria': float(df_exp_condition['Fo_criteria']),
-#                                     'frequency_analysis_method': df_exp_condition['frequency_analysis_method'],
-#                                     'gap': int(df_exp_condition['gap']),
-#                                     'regression_module': df_exp_condition['regression_module'],
-#                                     'regression_method':df_exp_condition['regression_method'],
-#                                     'regression_result_type': df_exp_condition['regression_result_type'],
-#                                     'regression_residual_converging_criteria':df_exp_condition['regression_residual_converging_criteria']
-#                                     }
-#
-#     # numerical_simulation_setting
-#
-#     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
-#                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
-#                                 'V_DC': float(df_exp_condition['V_DC']), 'rec_name': df_exp_condition['rec_name']}
-#     # solar_simulator_settings
-#     light_source_property = {'ks': float(df_exp_condition['ks']), 'bs': float(df_exp_condition['bs']),
-#                              'ka': float(df_exp_condition['ka']),
-#                              'ba': float(df_exp_condition['ba']), 'Amax': float(df_exp_condition['Amax']),
-#                              'sigma_s': float(df_exp_condition['sigma_s'])}
-#     # light_source_property
-#
-#     regression_result = None
-#
-#     if regression_module == 'lmfit':
-#
-#         params = Parameters()
-#
-#         if df_exp_condition['regression_result_type'] == 'alpha_r':
-#             params.add('alpha_r', value=float(df_exp_condition['p_initial']), min = 0.0)
-#
-#             out = lmfit.minimize(residual_update, params, args=(df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#                                                                 solar_simulator_settings, light_source_property, numerical_simulation_setting),xtol = df_exp_condition['regression_residual_converging_criteria'])
-#
-#             regression_result = out.params['alpha_r'].value
-#
-#         elif df_exp_condition['regression_result_type'] == 'sigma_s':
-#             params.add('sigma_s', value=float(df_exp_condition['p_initial']), min = 0.0)
-#
-#             out = lmfit.minimize(residual_update, params, args=(df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#                                                                 solar_simulator_settings, light_source_property, numerical_simulation_setting),xtol = df_exp_condition['regression_residual_converging_criteria'])
-#
-#             regression_result = out.params['sigma_s'].value
-#
-#
-#         #pass
-#     elif regression_module =='scipy.optimize-NM':
-#
-#         res = optimize.minimize(residual_update, x0=float(df_exp_condition['p_initial']), args=(
-#             df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#             solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead',
-#                        tol=df_exp_condition['regression_residual_converging_criteria'])
-#         regression_result = res['final_simplex'][0][0][0]
-#
-#     fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean = show_regression_results(
-#         df_exp_condition['regression_result_type'], regression_result, df_temperature,
-#         df_amplitude_phase_measurement, sample_information,
-#         vacuum_chamber_setting, solar_simulator_settings,
-#         light_source_property,
-#         numerical_simulation_setting)
-#
-#
-#
-#
-#     # if df_exp_condition['regression_result_type'] == 'alpha_r':
-#     #     res = minimize(residual, x0=float(df_exp_condition['p_initial']), args=(
-#     #     df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-#     #     solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
-#     #
-#     #     fig_regression,T_average, amp_residual_mean, phase_residual_mean,total_residual_mean = show_regression_results('alpha_r', res['final_simplex'][0][0][0], df_temperature,
-#     #                                              df_amplitude_phase_measurement, sample_information,
-#     #                                              vacuum_chamber_setting, solar_simulator_settings,
-#     #                                              light_source_property,
-#     #                                              numerical_simulation_setting)
-#     #     regression_result = res['final_simplex'][0][0][0]
-#     #
-#     # elif df_exp_condition['regression_result_type'] == 'sigma_s':
-#     #     res = minimize(residual_solar, x0=float(df_exp_condition['p_initial']), args=(
-#     #     df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting, solar_simulator_settings,
-#     #     light_source_property, numerical_simulation_setting), method='nelder-mead', tol=2e-6)
-#     #     fig_regression, T_average, amp_residual_mean, phase_residual_mean,total_residual_mean= show_regression_results('sigma_s', res['final_simplex'][0][0][0], df_temperature,
-#     #                                              df_amplitude_phase_measurement, sample_information,
-#     #                                              vacuum_chamber_setting, solar_simulator_settings,
-#     #                                              light_source_property,
-#     #                                              numerical_simulation_setting)
-#     #
-#     #     regression_result = res['final_simplex'][0][0][0]
-#
-#     print("recording {} completed.".format(rec_name))
-#     return regression_result, diagnostic_figure, fig_regression,T_average,amp_residual_mean, phase_residual_mean,total_residual_mean
 
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_directory, diagnostic_figure,
