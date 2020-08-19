@@ -944,6 +944,8 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 T_temp = T[p, :]
 
             if p == Nt-2:
+                time_index = p
+                #T_temp = T[p, :]
                 print("Error! No stable temperature profile was obtained!")
     else:
         q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
@@ -1351,6 +1353,186 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
     print("recording {} completed.".format(rec_name))
     return regression_result, diagnostic_figure, fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean
+
+
+def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name, output_name,
+                                     method, num_cores, code_directory, R0, R_analysis, focal_plane_relative_location):
+    df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
+                                                                                                         theta_range_list,
+                                                                                                         pr, path,
+                                                                                                         rec_name,
+                                                                                                         output_name,
+                                                                                                         method,
+                                                                                                         num_cores,
+                                                                                                         code_directory)
+
+    df_averaged_temperature = df_averaged_temperature.loc[:, df_averaged_temperature.columns != 'reltime']
+    df_averaged_temperature = df_averaged_temperature.mean(axis=0)
+
+    rep_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_rep_dump'
+    # rec_name
+    if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
+        temp_dump = pickle.load(open(rep_csv_dump_path, 'rb'))
+        df_first_frame = temp_dump[0]
+        frame_num_first = temp_dump[1]
+
+    else:  # If not we obtain the dump file, note the dump file is averaged radial temperature
+
+        file_name_0 = [path + x for x in os.listdir(path)][0]
+        n0 = file_name_0.rfind('//')
+        n1 = file_name_0.rfind('.csv')
+        frame_num_first = file_name_0[n0 + 2:n1]
+
+        df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+
+        temp_dump = [df_first_frame, frame_num_first]
+
+        pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
+
+    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+
+    fig = plt.figure(figsize=(13, 6))
+
+    plt.subplot(121)
+    plt.plot(df_averaged_temperature)
+
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+
+    plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
+    plt.ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+
+    plt.title("focal rel = {:.1f} cm".format(focal_plane_relative_location), fontsize=12, fontweight='bold')
+
+    # plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=12, fontweight='bold')
+
+    plt.subplot(122)
+
+    # R_analysis = 45
+    angle_range = theta_range_list
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+
+    ax = plt.gca()
+    CS = ax.contour(X, Y, Z, 12)
+    plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    R_angle_show = R0 + R_analysis
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01 / pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+    ax.invert_yaxis()
+    ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    ax.add_artist(circle1)
+    ax.add_artist(circle2)
+    ax.add_artist(circle3)
+
+    ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
+                                                                            y0 + R_angle_show * np.sin(
+                                                                                angle[0] * np.pi / 180)], ls='-.',
+                 color='blue', lw=2)
+
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+
+    plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
+    plt.ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+
+    return fig, df_averaged_temperature
+
+
+def parallel_temperature_average_batch_experimental_results_steady_state(df_exp_condition_spreadsheet_filename,
+                                                                         data_directory, num_cores, code_directory):
+    df_exp_condition_spreadsheet = pd.read_excel(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    steady_state_figure_list = []
+    df_temperature_list = []
+
+    for i in range(len(df_exp_condition_spreadsheet)):
+
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        rec_name = df_exp_condition['rec_name']
+        path = data_directory + str(rec_name) + "//"
+
+        output_name = rec_name
+
+        method = "MA"  # default uses Mosfata's code
+
+        x0 = df_exp_condition['x0']  # in pixels
+        y0 = df_exp_condition['y0']  # in pixels
+        Rmax = df_exp_condition['Rmax']  # in pixels
+        # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
+        pr = df_exp_condition['pr']
+        # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
+
+        # After obtaining temperature profile, next we obtain amplitude and phase
+        f_heating = df_exp_condition['f_heating']
+        # 1cm ->35
+        R0 = df_exp_condition['R0']
+        gap = df_exp_condition['gap']
+        # Rmax = 125
+        R_analysis = df_exp_condition['R_analysis']
+        exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
+        focal_plane_relative_location = df_exp_condition['focal_shift(cm)']
+
+        bb = df_exp_condition['anguler_range']
+        bb = bb[1:-1]  # reac_excel read an element as an array
+        index = None
+        angle_range = []
+        while (index != -1):
+            index = bb.find("],[")
+            element = bb[:index]
+            d = element.find(",")
+            element_after_comma = element[d + 1:]
+            element_before_comma = element[element.find("[") + 1:d]
+            # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
+            bb = bb[index + 2:]
+            angle_range.append([int(element_before_comma), int(element_after_comma)])
+
+        steady_state_figs, T_average_time_and_radius = steady_temperature_profile_check(x0, y0, Rmax, angle_range, pr,
+                                                                                        path, rec_name, output_name,
+                                                                                        method, num_cores,
+                                                                                        code_directory, R0, R_analysis,
+                                                                                        focal_plane_relative_location)
+
+        df_temperature_list.append(T_average_time_and_radius)
+        steady_state_figure_list.append(steady_state_figs)
+
+    return steady_state_figure_list, df_temperature_list
+
 
 
 def parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
