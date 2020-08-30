@@ -101,7 +101,7 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
     plt.show()
 
 
-def show_one_contour(df_temperature_one_frame, x0, y0, axes, x_adjust, y_adjust):
+def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adjust):
     R_zoom = 10
     x0 = x0 + x_adjust
     y0 = y0 + y_adjust
@@ -130,10 +130,10 @@ def show_one_contour(df_temperature_one_frame, x0, y0, axes, x_adjust, y_adjust)
     axes.add_artist(circle2)
 
 
-def check_center_contour(code_directory, data_directory, rec_num, x0, y0):
+def check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0):
     path = data_directory + rec_num + "//"
 
-    first_frame_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_first_frame'
+    first_frame_csv_dump_path = code_directory + "temperature cache dump//" + rec_num + '_first_frame'
 
     if (os.path.isfile(first_frame_csv_dump_path)):  # First check if a dump file exist:
         print('Found previous dump file for first frame:' + first_frame_csv_dump_path)
@@ -153,12 +153,36 @@ def check_center_contour(code_directory, data_directory, rec_num, x0, y0):
 
     n_x = 3
     n_y = 3
-    fig, axes = plt.subplots(n_x, n_y, sharex='all', sharey='all', figsize=(18, 18))
+
+    # print("---------------------------------{}----------------------------------".format(rec_num))
+
+    fig, axes = plt.subplots(n_x, n_y, sharex='all', sharey='all', figsize=(18, 19))
     plt.subplots_adjust(wspace=0, hspace=0)
 
     for j in range(n_y):
         for i in range(n_x):
-            show_one_contour(temp_dump, x0, y0, axes[j, i], i - 1, j - 1)
+            show_one_contour(temp_dump, x0, y0, R0, axes[j, i], i - 1, j - 1)
+    fig.suptitle("{}, x0 = {}, y0 = {}".format(rec_num, x0, y0), fontsize=12, fontweight='bold', y=0.90)
+    # print("---------------------------------NEW PLOT----------------------------------")
+
+
+def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreadsheet_filename):
+    df_exp_condition_spreadsheet = pd.read_excel(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    steady_state_figure_list = []
+    df_temperature_list = []
+
+    for i in range(len(df_exp_condition_spreadsheet)):
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        rec_num = df_exp_condition['rec_name']
+        x0 = df_exp_condition['x0']  # in pixels
+        y0 = df_exp_condition['y0']  # in pixels
+
+        R0 = df_exp_condition['R0']  # in pixels
+
+        check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0)
 
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
