@@ -28,8 +28,8 @@ from scipy.interpolate import interp1d
 def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analysis):
     fig = plt.figure(figsize=(13, 6))
 
-    df_first_frame = pd.read_csv(path + file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
-    df_mid_frame = pd.read_csv(path + file_name_1, sep=',', header=None, names=list(np.arange(0, 639)))
+    df_first_frame = pd.read_csv(path + file_name_0, skiprows=5,header = None)
+    df_mid_frame = pd.read_csv(path + file_name_1, skiprows=5,header = None)
 
     df_mid_frame_temperature = df_mid_frame.iloc[5:, :]
     df_first_frame_temperature = df_first_frame.iloc[5:, :]
@@ -99,6 +99,66 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
     ax.set_title("Another Frame", fontsize=12, fontweight='bold')
 
     plt.show()
+
+
+def show_one_contour(df_temperature_one_frame, x0, y0, axes, x_adjust, y_adjust):
+    R_zoom = 10
+    x0 = x0 + x_adjust
+    y0 = y0 + y_adjust
+
+    xmin = x0 - R0 - R_zoom
+    xmax = x0 + R0 + R_zoom
+    ymin = y0 - R0 - R_zoom
+    ymax = y0 + R0 + R_zoom
+    Z = np.array(df_temperature_one_frame.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    manual_locations = [(x0 - R0 + 6, y0 - R0 + 6)]
+
+    CS = axes.contour(X, Y, Z, 16)
+    axes.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    axes.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_zoom, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    axes.invert_yaxis()
+    axes.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    axes.add_artist(circle1)
+    axes.add_artist(circle2)
+
+
+def check_center_contour(code_directory, data_directory, rec_num, x0, y0):
+    path = data_directory + rec_num + "//"
+
+    first_frame_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_first_frame'
+
+    if (os.path.isfile(first_frame_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for first frame:' + first_frame_csv_dump_path)
+        temp_dump = pickle.load(open(first_frame_csv_dump_path, 'rb'))
+    else:
+
+        file_name_0 = [path + x for x in os.listdir(path)][0]
+
+        n0 = file_name_0.rfind('//')
+        n1 = file_name_0.rfind('.csv')
+        frame_num_first = file_name_0[n0 + 2:n1]
+
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5, header=None)
+
+        temp_dump = df_first_frame
+        pickle.dump(temp_dump, open(first_frame_csv_dump_path, "wb"))
+
+    n_x = 3
+    n_y = 3
+    fig, axes = plt.subplots(n_x, n_y, sharex='all', sharey='all', figsize=(18, 18))
+    plt.subplots_adjust(wspace=0, hspace=0)
+
+    for j in range(n_y):
+        for i in range(n_x):
+            show_one_contour(temp_dump, x0, y0, axes[j, i], i - 1, j - 1)
 
 
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
@@ -244,7 +304,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         tick.label.set_fontsize(fontsize=10)
         tick.label.set_fontweight('bold')
 
-    plt.xlabel('R (m)', fontsize=12, fontweight='bold')
+    plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
     plt.ylabel('Amplitude Ratio', fontsize=12, fontweight='bold')
     plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=12, fontweight='bold')
     plt.legend()
@@ -267,7 +327,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         tick.label.set_fontsize(fontsize=10)
         tick.label.set_fontweight('bold')
 
-    plt.xlabel('R (m)', fontsize=12, fontweight='bold')
+    plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
     plt.ylabel('Phase difference (rad)', fontsize=12, fontweight='bold')
     plt.title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
     plt.legend()
@@ -314,7 +374,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         n1 = file_name_0.rfind('.csv')
         frame_num_first = file_name_0[n0 + 2:n1]
 
-        df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5,header = None)
 
         #N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
         N_mid = 20
@@ -323,7 +383,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
         n3 = file_name_1.rfind('.csv')
         frame_num_mid = file_name_1[n2 + 2:n3]
 
-        df_mid_frame = pd.read_csv(file_name_1, sep=',', header=None, names=list(np.arange(0, 639)))
+        df_mid_frame = pd.read_csv(file_name_1, skiprows=5,header = None)
 
         temp_dump = [df_first_frame, df_mid_frame, frame_num_first, frame_num_mid]
 
@@ -1149,7 +1209,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
     plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['amp_ratio'], marker='+',
                 label='regression results')
 
-    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
+    plt.xlabel('R (pixels)', fontsize=14, fontweight='bold')
     plt.ylabel('Amplitude Ratio', fontsize=14, fontweight='bold')
 
     ax = plt.gca()
@@ -1170,7 +1230,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
     plt.scatter(df_amp_phase_simulated['r'], df_amp_phase_simulated['phase_diff'], marker='+',
                 label='regression results')
 
-    plt.xlabel('R (m)', fontsize=14, fontweight='bold')
+    plt.xlabel('R (pixels)', fontsize=14, fontweight='bold')
     plt.ylabel('Phase difference (rad)', fontsize=14, fontweight='bold')
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
@@ -1384,7 +1444,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
         n1 = file_name_0.rfind('.csv')
         frame_num_first = file_name_0[n0 + 2:n1]
 
-        df_first_frame = pd.read_csv(file_name_0, sep=',', header=None, names=list(np.arange(0, 639)))
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5,header = None)
 
         temp_dump = [df_first_frame, frame_num_first]
 
