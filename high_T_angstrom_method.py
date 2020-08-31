@@ -185,6 +185,67 @@ def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreads
         check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0)
 
 
+# joblib_output
+def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_condition_spreadsheet_filename):
+    df_exp_condition = pd.read_excel(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    regression_params = [joblib_output_[0] for joblib_output_ in joblib_output]
+    T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
+    df_exp_condition = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="solar simulator Lorentzian")
+
+    locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
+
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
+
+    # f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
+    f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
+
+    sample_material = np.unique(df_exp_condition['sample_name'])[0]
+    # Here we assume each spreadsheet only contains one material
+    df_theoretical_thermal_diffusivity_all = pd.read_excel(
+        code_directory + "sample specifications//sample properties.xlsx", sheet_name="thermal diffusivity")
+    df_theoretical_thermal_diffusivity = df_theoretical_thermal_diffusivity_all.query(
+        "Material=='{}'".format(sample_material))
+
+    temperatures_theoretical = df_theoretical_thermal_diffusivity['Temperature C'] + 273.15  # converted to K
+    theoretical_thermal_diffusivity = df_theoretical_thermal_diffusivity['Thermal diffsivity']
+
+    f_alpha = interp1d(temperatures_theoretical, theoretical_thermal_diffusivity, kind='linear')
+
+    sigma_s_list = []
+
+    alpha_regression_list = []
+    alpha_theoretical_list = []
+
+    sigma_ray_tracing_list = []
+
+    for i, regression_type in enumerate(df_exp_condition['regression_result_type']):
+
+        if regression_type == 'sigma_s':
+            sigma_s_list.append(joblib_output[i][0])
+            alpha_regression_list.append(df_exp_condition['alpha_r'][i])
+            sigma_ray_tracing_list.append(f_sigma(focal_shift))
+
+        elif regression_type == 'alpha_r':
+            focal_shift = df_exp_condition['focal_shift(cm)'][i]
+            sigma_s_list.append(f_sigma(focal_shift))
+            alpha_regression_list.append(joblib_output[i][0])
+            sigma_ray_tracing_list.append(f_sigma(focal_shift))
+
+            alpha_theoretical_list.append(f_alpha(T_average_list[i]))
+
+    df_results_all = pd.DataFrame(
+        {'rec_name': df_exp_condition['rec_name'], 'focal_distance': df_exp_condition['focal_shift(cm)'],
+         'f_heating': df_exp_condition['f_heating'], 'VDC': df_exp_condition['V_DC'],
+         'sigma_s': sigma_s_list, 'T_average': T_average_list, 'R0': df_exp_condition['R0'],
+         'alpha_r': alpha_regression_list, 'regression_parameter': df_exp_condition['regression_result_type']
+            , 'alpha_theoretical': alpha_theoretical_list, 'sigma_ray_tracing': sigma_ray_tracing_list})
+
+    return df_results_all
+
 def select_data_points_radial_average_MA(x0, y0, Rmax, theta_range, file_name): # extract radial averaged temperature from one csv file
     # This method was originally developed by Mosfata, was adapted by HY to use for amplitude and phase estimation
 
