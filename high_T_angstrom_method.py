@@ -50,7 +50,7 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
 
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 12)
+    CS = ax.contour(X, Y, Z, 18)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -82,7 +82,7 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
 
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 12)
+    CS = ax.contour(X, Y, Z, 18)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -433,7 +433,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
     # fig, ax = plt.subplots(figsize=(6, 6))
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 12)
+    CS = ax.contour(X, Y, Z, 18)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -480,7 +480,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
     # fig, ax = plt.subplots(figsize=(6, 6))
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 12)
+    CS = ax.contour(X, Y, Z, 18)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -1515,7 +1515,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
 
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 12)
+    CS = ax.contour(X, Y, Z, 18)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -1829,6 +1829,29 @@ def display_high_dimensional_regression_results(x_name, y_name, row_name, column
                 axes[i, j].set_ylim(ylim)
                 axes[i, j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
                 axes[i, j].set_title("{} = {:.1E},{} = {:.1E}".format(row_name, row, column_name, column))
+    plt.tight_layout(h_pad=2)
+    plt.legend()
+
+    plt.show()
+
+
+def display_high_dimensional_regression_results_one_row(x_name, y_name, column_name, series_name, df_results_all, ylim):
+    column_items = np.unique(df_results_all[column_name])
+    series_items = np.unique(df_results_all[series_name])
+    f, axes = plt.subplots(1, len(column_items),
+                           figsize=(int(len(column_items) * 5), 5),sharex=True, sharey=True)
+    for j, column in enumerate(column_items):
+        df_results_all_ = df_results_all.query("{} == {}".format(column_name, column))
+
+        for series in series_items:
+            df_ = df_results_all_.query("{}=={}".format(series_name, series))
+            axes[j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+            axes[j].set_xlabel(x_name)
+            axes[j].set_ylabel(y_name)
+            axes[j].set_ylim(ylim)
+            axes[j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+            axes[j].set_title("{} = {:.1E}".format(column_name, column))
+
     plt.tight_layout(h_pad=2)
     plt.legend()
 
