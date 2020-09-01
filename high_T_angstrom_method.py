@@ -1911,8 +1911,8 @@ def display_high_dimensional_regression_results_one_row(x_name, y_name, column_n
             axes[j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
             axes[j].set_title("{} = {:.1E}".format(column_name, column))
 
-    if y_name == 'alpha_r':
-        axes[j].scatter(df_results_all_[x_name], df_results_all_['alpha_theoretical'], label='reference')
+        if y_name == 'alpha_r':
+            axes[j].scatter(df_results_all_[x_name], df_results_all_['alpha_theoretical'], label='reference')
 
     plt.tight_layout(h_pad=2)
     plt.legend()
