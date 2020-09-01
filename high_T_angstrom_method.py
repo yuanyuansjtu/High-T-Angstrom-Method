@@ -237,12 +237,10 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
             alpha_theoretical_list.append(f_alpha(T_average_list[i]))
 
-    df_results_all = pd.DataFrame(
-        {'rec_name': df_exp_condition['rec_name'], 'focal_distance': df_exp_condition['focal_shift(cm)'],
-         'f_heating': df_exp_condition['f_heating'], 'VDC': df_exp_condition['V_DC'],
-         'sigma_s': sigma_s_list, 'T_average': T_average_list, 'R0': df_exp_condition['R0'],
-         'alpha_r': alpha_regression_list, 'regression_parameter': df_exp_condition['regression_result_type']
-            , 'alpha_theoretical': alpha_theoretical_list, 'sigma_ray_tracing': sigma_ray_tracing_list})
+    df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift(cm)'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
+                                   'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_result_type']
+                                   ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list})
+
 
     return df_results_all
 
@@ -1912,6 +1910,9 @@ def display_high_dimensional_regression_results_one_row(x_name, y_name, column_n
             axes[j].set_ylim(ylim)
             axes[j].yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
             axes[j].set_title("{} = {:.1E}".format(column_name, column))
+
+    if y_name == 'alpha_r':
+        axes[j].scatter(df_results_all_[x_name], df_results_all_['alpha_theoretical'], label='reference')
 
     plt.tight_layout(h_pad=2)
     plt.legend()
