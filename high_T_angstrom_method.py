@@ -22,7 +22,7 @@ from scipy.stats import multivariate_normal
 #from scipy.optimize import minimize
 from scipy import optimize
 import matplotlib.ticker as mtick
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d,interp2d
 
 
 def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analysis):
@@ -101,8 +101,7 @@ def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analy
     plt.show()
 
 
-def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adjust):
-    R_zoom = 10
+def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adjust, R_zoom, n_contour):
     x0 = x0 + x_adjust
     y0 = y0 + y_adjust
 
@@ -117,7 +116,7 @@ def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adj
 
     manual_locations = [(x0 - R0 + 6, y0 - R0 + 6)]
 
-    CS = axes.contour(X, Y, Z, 16)
+    CS = axes.contour(X, Y, Z, n_contour)
     axes.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     axes.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -130,39 +129,58 @@ def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adj
     axes.add_artist(circle2)
 
 
-def check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0):
+def check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0, R_analysis):
     path = data_directory + rec_num + "//"
 
-    first_frame_csv_dump_path = code_directory + "temperature cache dump//" + rec_num + '_first_frame'
+    check_contour_csv_dump_path = code_directory + "temperature cache dump//" + rec_num + '_check_contour'
 
-    if (os.path.isfile(first_frame_csv_dump_path)):  # First check if a dump file exist:
-        print('Found previous dump file for first frame:' + first_frame_csv_dump_path)
-        temp_dump = pickle.load(open(first_frame_csv_dump_path, 'rb'))
+    if (os.path.isfile(check_contour_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for contour_checking:' + check_contour_csv_dump_path)
+        temp_dump = pickle.load(open(check_contour_csv_dump_path, 'rb'))
     else:
 
-        file_name_0 = [path + x for x in os.listdir(path)][0]
+        N_files = len([path + x for x in os.listdir(path)])
 
+        file_name_0 = [path + x for x in os.listdir(path)][0]
         n0 = file_name_0.rfind('//')
         n1 = file_name_0.rfind('.csv')
-        frame_num_first = file_name_0[n0 + 2:n1]
+        frame_num_0 = file_name_0[n0 + 2:n1]
+        df_frame_0 = pd.read_csv(file_name_0, skiprows=5, header=None)
 
-        df_first_frame = pd.read_csv(file_name_0, skiprows=5, header=None)
+        file_name_1 = [path + x for x in os.listdir(path)][int(N_files / 6)]
+        n0 = file_name_1.rfind('//')
+        n1 = file_name_1.rfind('.csv')
+        frame_num_1 = file_name_1[n0 + 2:n1]
+        df_frame_1 = pd.read_csv(file_name_1, skiprows=5, header=None)
 
-        temp_dump = df_first_frame
-        pickle.dump(temp_dump, open(first_frame_csv_dump_path, "wb"))
+        file_name_2 = [path + x for x in os.listdir(path)][int(N_files / 8)]
+        n0 = file_name_2.rfind('//')
+        n1 = file_name_2.rfind('.csv')
+        frame_num_2 = file_name_2[n0 + 2:n1]
+        df_frame_2 = pd.read_csv(file_name_2, skiprows=5, header=None)
+
+        temp_dump = [df_frame_0, df_frame_1, df_frame_2]
+        pickle.dump(temp_dump, open(check_contour_csv_dump_path, "wb"))
 
     n_x = 3
     n_y = 3
 
     # print("---------------------------------{}----------------------------------".format(rec_num))
 
-    fig, axes = plt.subplots(n_x, n_y, sharex='all', sharey='all', figsize=(18, 19))
+    fig, axes = plt.subplots(n_y, n_x, sharex='all', sharey='all', figsize=(n_x * 6, n_y * 6 + 1))
     plt.subplots_adjust(wspace=0, hspace=0)
 
     for j in range(n_y):
         for i in range(n_x):
-            show_one_contour(temp_dump, x0, y0, R0, axes[j, i], i - 1, j - 1)
+            show_one_contour(temp_dump[0], x0, y0, R0, axes[j, i], i - 1, j - 1, 15, 16)  # R_zoom = 15, n_contour = 16
     fig.suptitle("{}, x0 = {}, y0 = {}".format(rec_num, x0, y0), fontsize=12, fontweight='bold', y=0.90)
+
+    fig1, axes1 = plt.subplots(1, 3, sharex='all', sharey='all', figsize=(3 * 6, 1 * 6))
+    plt.subplots_adjust(wspace=0, hspace=0)
+
+    for j in range(3):
+        show_one_contour(temp_dump[j], x0, y0, R0, axes1[j], 0, 0, R_analysis, 12)
+
     # print("---------------------------------NEW PLOT----------------------------------")
 
 
@@ -181,16 +199,14 @@ def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreads
         y0 = df_exp_condition['y0']  # in pixels
 
         R0 = df_exp_condition['R0']  # in pixels
+        R_analysis = df_exp_condition['R_analysis']
 
-        check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0)
+        check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0,R_analysis)
 
 
 # joblib_output
 def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_condition_spreadsheet_filename):
-    df_exp_condition = pd.read_excel(
-        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
 
-    regression_params = [joblib_output_[0] for joblib_output_ in joblib_output]
     T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
     df_exp_condition = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
     df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
@@ -226,7 +242,8 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
         if regression_type == 'sigma_s':
             sigma_s_list.append(joblib_output[i][0])
-            alpha_regression_list.append(df_exp_condition['alpha_r'][i])
+            focal_shift = df_exp_condition['focal_shift(cm)'][i]
+            alpha_regression_list.append(f_alpha(T_average_list[i])) # this is wrong, need fixed!
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
 
         elif regression_type == 'alpha_r':
@@ -351,7 +368,7 @@ def select_data_points_radial_average_MA_vectorized(x0, y0, Rmax, theta_range, f
 
 
 def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, method, num_cores, f_heating, R0, gap,
-                             R_analysis, angle_range, exp_amp_phase_extraction_method,code_directory):
+                             R_analysis, angle_range,focal_plane_location,VDC, exp_amp_phase_extraction_method,code_directory):
     # we basically break entire disk into 6 regions, with interval of pi/3
     fig = plt.figure(figsize=(18.3, 12))
     colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta','brown','yellow']
@@ -389,7 +406,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
     plt.ylabel('Amplitude Ratio', fontsize=12, fontweight='bold')
-    plt.title('f_heating = {} Hz, rec = {}'.format(f_heating, rec_name), fontsize=12, fontweight='bold')
+    plt.title('rec = {}'.format(rec_name), fontsize=12, fontweight='bold')
     plt.legend()
 
     plt.subplot(232)
@@ -412,7 +429,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.xlabel('R (pixels)', fontsize=12, fontweight='bold')
     plt.ylabel('Phase difference (rad)', fontsize=12, fontweight='bold')
-    plt.title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+    #plt.title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
     plt.legend()
 
     plt.subplot(233)
@@ -437,7 +454,9 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     plt.xlabel('Time (s)', fontsize=12, fontweight='bold')
     plt.ylabel('Temperature (K)', fontsize=12, fontweight='bold')
-    plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
+
+    plt.title('f_heating = {} Hz'.format(f_heating), fontsize=12, fontweight='bold')
+    #plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
     plt.legend()
 
     rep_csv_dump_path = code_directory+"temperature cache dump//" + rec_name + '_rep_dump'
@@ -472,8 +491,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
         pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
 
-    df_mid_frame_temperature = df_mid_frame.iloc[5:, :]
-    df_first_frame_temperature = df_first_frame.iloc[5:, :]
+    #df_mid_frame_temperature = df_mid_frame.iloc[5:, :]
+    #df_first_frame_temperature = df_first_frame.iloc[5:, :]
 
     plt.subplot(234)
 
@@ -481,7 +500,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
     ymax = y0 + R0 + R_analysis
-    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    Z = np.array(df_first_frame.iloc[ymin:ymax, xmin:xmax])
     x = np.arange(xmin, xmax, 1)
     y = np.arange(ymin, ymax, 1)
     X, Y = np.meshgrid(x, y)
@@ -504,8 +523,6 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     circle3 = plt.Circle((x0, y0), int(0.01/pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
 
-
-
     ax.invert_yaxis()
     ax.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
     ax.add_artist(circle1)
@@ -514,7 +531,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
+    ax.set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
 
     for j, angle in enumerate(angle_range):
         plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
@@ -528,7 +545,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
     ymax = y0 + R0 + R_analysis
-    Z = np.array(df_mid_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    Z = np.array(df_mid_frame.iloc[ymin:ymax, xmin:xmax])
     x = np.arange(xmin, xmax, 1)
     y = np.arange(ymin, ymax, 1)
     X, Y = np.meshgrid(x, y)
@@ -561,7 +578,8 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
-    ax.set_title(frame_num_mid, fontsize=12, fontweight='bold')
+    ax.set_title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
+    #plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
 
     for j, angle in enumerate(angle_range):
         plt.plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0,
@@ -585,6 +603,9 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     ax = plt.gca()
     ax.set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+
+    #plt.title('R_ayalysis = {}, gap = {}'.format(R_analysis, gap), fontsize=12, fontweight='bold')
+    ax.set_title("focal = {} cm, VDC = {} V".format(focal_plane_location,VDC), fontsize=12, fontweight='bold')
     plt.legend()
 
     #ax.set_title("Temperature vs R", fontsize=12, fontweight='bold')
@@ -1257,15 +1278,15 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
 
     if param_name == 'alpha_r':
         sample_information['alpha_r'] = regression_result
-        title_text = 'alpha = {:.2E} m2/s, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,
+        title_text = 'alpha = {:.2E} m2/s, DC = {} V, d = {} cm'.format(regression_result,
                                                                               solar_simulator_settings['V_DC'],
-                                                                              vacuum_chamber_setting['T_sur1'])
+                                                                              vacuum_chamber_setting['focal_shift(cm)'])
 
     elif param_name == 'sigma_s':
         light_source_property['sigma_s'] = regression_result
-        title_text = 'sigma_s = {:.2E}, VDC = {} V, TS1 = {:.0f} K'.format(regression_result,
+        title_text = 'sigma_s = {:.2E}, DC = {} V, d = {} cm'.format(regression_result,
                                                                            solar_simulator_settings['V_DC'],
-                                                                           vacuum_chamber_setting['T_sur1'])
+                                                                           vacuum_chamber_setting['focal_shift(cm)'])
 
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,
                                                                                                      df_amplitude_phase_measurement,
@@ -1394,6 +1415,8 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     df_solar_simulator_VI = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                           sheet_name="solar simulator VI")
 
+    df_LB_temperature = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                      sheet_name="LB temperature")
 
     sample_name = df_exp_condition['sample_name']
     df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
@@ -1405,6 +1428,18 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
     regression_module = df_exp_condition['regression_module']
 
+    LB_temp_focal_shift = df_LB_temperature['focal_distance(cm)']
+    LB_temp_VDC = df_LB_temperature['VDC']
+    LB_temp = df_LB_temperature['T(C)']
+
+    f_LB_temp = interp2d(LB_temp_VDC, LB_temp_focal_shift, LB_temp, kind='linear')
+
+
+
+    focal_shift = df_exp_condition['focal_shift(cm)']
+    VDC = float(df_exp_condition['VDC'])
+
+
     sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
                           'rho': float(df_sample_cp_rho_alpha['rho']),
                           'cp_const': float(df_sample_cp_rho_alpha['cp_const']), 'cp_c1':
@@ -1415,7 +1450,8 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                           'absorptivity': df_exp_condition['absorptivity']}
     # sample_information
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
-                              'T_sur1': float(df_exp_condition['T_sur1']), 'T_sur2': float(df_exp_condition['T_sur2'])}
+                              'T_sur1': f_LB_temp(VDC,focal_shift), 'T_sur2': float(df_exp_condition['T_sur2']),
+                              'focal_shift(cm)':focal_shift}
     # vacuum_chamber_setting
 
     numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
@@ -1434,7 +1470,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # the code is executed using vectorized approach by default
 
     # numerical_simulation_setting
-    focal_shift = df_exp_condition['focal_shift(cm)']
+
 
     locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
     Amax_relative_focal_plane = df_solar_simulator_lorentzian['Amax']
@@ -1445,7 +1481,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
-                                'V_DC': float(df_exp_condition['V_DC']), 'rec_name': rec_name}
+                                'V_DC': VDC, 'rec_name': rec_name}
     # solar_simulator_settings
     light_source_property = {'ks': float(df_solar_simulator_VI['ks']), 'bs': float(df_solar_simulator_VI['bs']),
                              'ka': float(df_solar_simulator_VI['ka']),
@@ -1715,6 +1751,9 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
         R_analysis = df_exp_condition['R_analysis']
         exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
 
+        focal_plane_location = df_exp_condition['focal_shift(cm)']
+        VDC = df_exp_condition['V_DC']
+
         bb = df_exp_condition['anguler_range']
         bb = bb[1:-1] # reac_excel read an element as an array
         index = None
@@ -1730,8 +1769,7 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
             angle_range.append([int(element_before_comma),int(element_after_comma)])
 
         sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
-                                                              num_cores, f_heating, R0, gap, R_analysis,angle_range,
-                                                              exp_amp_phase_extraction_method,code_directory)
+                                                              num_cores, f_heating, R0, gap, R_analysis,angle_range,focal_plane_location, VDC, exp_amp_phase_extraction_method,code_directory)
 
         diagnostic_figure_list.append(diagnostic_figure)
 
