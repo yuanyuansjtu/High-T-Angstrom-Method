@@ -245,6 +245,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
             focal_shift = df_exp_condition['focal_shift(cm)'][i]
             alpha_regression_list.append(f_alpha(T_average_list[i])) # this is wrong, need fixed!
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
+            alpha_theoretical_list.append(f_alpha(T_average_list[i]))
 
         elif regression_type == 'alpha_r':
             focal_shift = df_exp_condition['focal_shift(cm)'][i]
