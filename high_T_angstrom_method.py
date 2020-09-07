@@ -1158,7 +1158,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
 
-    print('alpha_r = {:.2E}, Amax = {:.2E}, sigma_s = {:.2E}, f_heating = {}, Rec = {}.'.format(alpha_r, light_source_property['Amax'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name']))
+    print('alpha_r = {:.2E}, Amax = {:.2E}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(alpha_r, light_source_property['Amax'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name'],vacuum_chamber_setting['T_sur1']))
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
@@ -1437,7 +1437,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
 
     focal_shift = df_exp_condition['focal_shift(cm)']
-    VDC = float(df_exp_condition['VDC'])
+    VDC = float(df_exp_condition['V_DC'])
 
 
     sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
@@ -1449,9 +1449,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                           'emissivity': df_exp_condition['emissivity'],
                           'absorptivity': df_exp_condition['absorptivity']}
     # sample_information
+    # Note that T_sur1 is read in degree C, must be converted to K.
+
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
-                              'T_sur1': f_LB_temp(VDC,focal_shift), 'T_sur2': float(df_exp_condition['T_sur2']),
-                              'focal_shift(cm)':focal_shift}
+                              'T_sur1': float(f_LB_temp(VDC,focal_shift))+273.15, 'T_sur2': float(df_exp_condition['T_sur2']),
+                              'focal_shift(cm)':focal_shift,'R_analysis':int(df_exp_condition['R_analysis'])}
     # vacuum_chamber_setting
 
     numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
