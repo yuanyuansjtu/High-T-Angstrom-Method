@@ -1439,6 +1439,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     focal_shift = df_exp_condition['focal_shift(cm)']
     VDC = float(df_exp_condition['V_DC'])
 
+    if df_exp_condition['regression_result_type'] == 'alpha_r':
+        T_sur1 = float(f_LB_temp(VDC,focal_shift))+273.15
+    else:
+        T_sur1 = df_exp_condition['T_sur2']
+
 
     sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
                           'rho': float(df_sample_cp_rho_alpha['rho']),
@@ -1448,11 +1453,12 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                           'alpha_z': float(df_sample_cp_rho_alpha['alpha_z']), 'T_initial': None,
                           'emissivity': df_exp_condition['emissivity'],
                           'absorptivity': df_exp_condition['absorptivity']}
+
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
 
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
-                              'T_sur1': float(f_LB_temp(VDC,focal_shift))+273.15, 'T_sur2': float(df_exp_condition['T_sur2']),
+                              'T_sur1': T_sur1, 'T_sur2': float(df_exp_condition['T_sur2']),
                               'focal_shift(cm)':focal_shift,'R_analysis':int(df_exp_condition['R_analysis'])}
     # vacuum_chamber_setting
 
@@ -1958,6 +1964,31 @@ def display_high_dimensional_regression_results_one_row(x_name, y_name, column_n
     plt.legend()
 
     plt.show()
+
+
+def display_high_dimensional_regression_results_one_row_one_column(x_name, y_name, series_name, df_results_all, ylim):
+    #column_items = np.unique(df_results_all[column_name])
+    series_items = np.unique(df_results_all[series_name])
+    plt.figure(figsize = (8,6))
+
+
+    for series in series_items:
+        df_ = df_results_all.query("{}=={}".format(series_name, series))
+        plt.scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+        plt.xlabel(x_name)
+        plt.ylabel(y_name)
+        plt.ylim(ylim)
+        axes = plt.gca()
+        axes.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+
+    if y_name == 'alpha_r':
+        plt.scatter(df_results_all[x_name], df_results_all['alpha_theoretical'], label='reference')
+
+    plt.tight_layout(h_pad=2)
+    plt.legend()
+
+    plt.show()
+
 
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
