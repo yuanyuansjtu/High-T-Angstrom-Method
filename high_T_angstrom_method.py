@@ -1164,6 +1164,13 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
 
+
+
+
+
+
+
+
 def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property, numerical_simulation_setting):
@@ -1572,13 +1579,11 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
         n1 = file_name_0.rfind('.csv')
         frame_num_first = file_name_0[n0 + 2:n1]
 
-        df_first_frame = pd.read_csv(file_name_0, skiprows=5,header = None)
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5, header=None)
 
         temp_dump = [df_first_frame, frame_num_first]
 
         pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
-
-    df_first_frame_temperature = df_first_frame.iloc[5:, :]
 
     fig = plt.figure(figsize=(13, 6))
 
@@ -1609,7 +1614,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
     xmax = x0 + R0 + R_analysis
     ymin = y0 - R0 - R_analysis
     ymax = y0 + R0 + R_analysis
-    Z = np.array(df_first_frame_temperature.iloc[ymin:ymax, xmin:xmax])
+    Z = np.array(df_first_frame.iloc[ymin:ymax, xmin:xmax])
     x = np.arange(xmin, xmax, 1)
     y = np.arange(ymin, ymax, 1)
     X, Y = np.meshgrid(x, y)
@@ -1619,7 +1624,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
     manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
 
     ax = plt.gca()
-    CS = ax.contour(X, Y, Z, 18)
+    CS = ax.contour(X, Y, Z, 12)
     plt.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     plt.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
@@ -1638,6 +1643,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
 
     ax.set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
     ax.set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    print(frame_num_first)
     ax.set_title(frame_num_first, fontsize=12, fontweight='bold')
 
     for j, angle in enumerate(angle_range):
@@ -1991,6 +1997,77 @@ def display_high_dimensional_regression_results_one_row_one_column(x_name, y_nam
     plt.show()
 
 
+def create_circular_mask(h, w, center, radius):
+
+    Y, X = np.ogrid[:h, :w]
+    dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+    mask = dist_from_center <= radius
+    return mask
+
+
+def calculate_total_emission(file_name, x0, y0, R_sample, pr, emissivity_front, emissivity_back):
+    df_temp_ = pd.read_csv(file_name, skiprows=5, header=None)
+    df_temp = df_temp_ + 273.15  # convert C to K
+    h, w = df_temp.shape
+    mask = create_circular_mask(h, w, center=[x0, y0], radius=R_sample)
+    IR_rec_array = np.array(df_temp)
+    IR_rec_array[~mask] = 0
+
+    sigma_sb = 5.67e-8  # Stefan-Boltzmann constant
+
+    E_front = np.sum(emissivity_front * sigma_sb * IR_rec_array ** 4 * pr ** 2)
+    E_back = np.sum(emissivity_back * sigma_sb * IR_rec_array ** 4 * pr ** 2)
+
+    E_total = E_front + E_back
+
+    return E_total
+
+
+def batch_process_steady_state_emission_spread_sheet(data_directory, code_directory,
+                                                     df_exp_condition_spreadsheet_filename, num_cores):
+    df_exp_condition_spreadsheet = pd.read_excel(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    emission_list = []
+
+    for i in range(len(df_exp_condition_spreadsheet)):
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        rec_name = df_exp_condition['rec_name']
+        path = data_directory + str(rec_name) + "//"
+
+        output_name = rec_name
+        x0 = df_exp_condition['x0']  # in pixels
+        y0 = df_exp_condition['y0']  # in pixels
+        Rmax = df_exp_condition['Rmax']  # in pixels
+        # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
+        pr = df_exp_condition['pr']
+        # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
+
+        emissivity_front = df_exp_condition['emissivity_front']
+        emissivity_back = df_exp_condition['emissivity_back']
+
+        # focal_plane_location = df_exp_condition['focal_shift(cm)']
+        # VDC = df_exp_condition['V_DC']
+
+        file_names = [path + x for x in os.listdir(path)]
+
+        joblib_output = Parallel(n_jobs=num_cores
+                                 )(
+            delayed(calculate_total_emission)(file_name, x0, y0, Rmax, pr, emissivity_front, emissivity_back) for
+            file_name in tqdm(file_names))
+
+        E_mean = np.mean(joblib_output)
+        emission_list.append(E_mean)
+
+    df_DC_results = pd.DataFrame({'rec_name': df_exp_condition_spreadsheet['rec_name'],
+                                  'focal_shift': df_exp_condition_spreadsheet['focal_shift_cm'],
+                                  'V_DC': df_exp_condition_spreadsheet['V_DC'], 'E_total': emission_list,
+                                  'emissivity_front': df_exp_condition_spreadsheet['emissivity_front'],
+                                  'emissivity_back': df_exp_condition_spreadsheet['emissivity_back'],
+                                  'absorptivity_front': df_exp_condition_spreadsheet['absorptivity_front']})
+
+    return df_DC_results
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
                              solar_simulator_settings, light_source_property):
