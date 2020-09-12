@@ -1986,7 +1986,7 @@ def display_high_dimensional_regression_results_one_row_one_column(x_name, y_nam
         plt.ylabel(y_name)
         plt.ylim(ylim)
         axes = plt.gca()
-        axes.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+        axes.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.2e'))
 
     if y_name == 'alpha_r':
         plt.scatter(df_results_all[x_name], df_results_all['alpha_theoretical'], label='reference')
@@ -2371,6 +2371,54 @@ def interaction_effects_2_level_DOE(df_original, f_heating, parameter_name_list,
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     return df_interaction, f
+
+
+def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_heating_list, parameter_name_list,
+                                      df_r_ref_locations):
+    f, axes = plt.subplots(1, len(f_heating_list),
+                           figsize=(int(len(f_heating_list) * 4), 5), sharex=True, sharey=True)
+
+    parameter_name_columns = parameter_name_list.copy()
+    parameter_name_columns.remove('f_heating')
+
+    for i, f_heating in enumerate(f_heating_list):
+        df_main_effect = main_effects_2_level_DOE(df_results_main_effect, f_heating, parameter_name_list,
+                                                  df_r_ref_locations)
+
+        for parameter_name in parameter_name_columns:
+            axes[i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=parameter_name)
+
+        axes[i].set_xlabel('R(pixel)', fontsize=12, fontweight='bold')
+        axes[i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+        if i == 0:
+            axes[i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
+        axes[i].legend(prop={'weight': 'bold', 'size': 12})
+
+        for tick in axes[i].xaxis.get_major_ticks():
+            tick.label.set_fontsize(fontsize=12)
+            tick.label.set_fontweight('bold')
+        for tick in axes[i].yaxis.get_major_ticks():
+            tick.label.set_fontsize(fontsize=12)
+            tick.label.set_fontweight('bold')
+
+    plt.tight_layout(h_pad=1)
+
+
+def amp_phase_DOE_sensitivity(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,df_temperature,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting):
+
+    jupyter_directory = os.getcwd() # note if you run this in Pycharm then manually change, sorry
+    df_results_amp_ratio_complete, df_results_phase_difference_complete = parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,jupyter_directory,df_temperature,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting)
+
+
+    y_axis_label = 'Amplitude ratio ME'
+    main_effect_2nd_level_DOE_one_row(df_results_amp_ratio_complete,y_axis_label,f_heating_list,parameter_name_list,df_r_ref_locations)
+
+    y_axis_label = 'Phase diff ME'
+    main_effect_2nd_level_DOE_one_row(df_results_phase_difference_complete,y_axis_label,f_heating_list,parameter_name_list,df_r_ref_locations)
+
+
+
+
 
 
 class MCMC_sampler:
