@@ -209,10 +209,11 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
     T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
     df_exp_condition = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
-    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="solar simulator Lorentzian")
 
-    locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
+    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="solar simulator Lorentzian Ang")
+
+    locations_relative_focal_plane = df_solar_simulator_lorentzian['focal_shift']
 
     sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
 
@@ -242,20 +243,20 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
         if regression_type == 'sigma_s':
             sigma_s_list.append(joblib_output[i][0])
-            focal_shift = df_exp_condition['focal_shift(cm)'][i]
+            focal_shift = df_exp_condition['focal_shift'][i]
             alpha_regression_list.append(f_alpha(T_average_list[i])) # this is wrong, need fixed!
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
             alpha_theoretical_list.append(f_alpha(T_average_list[i]))
 
         elif regression_type == 'alpha_r':
-            focal_shift = df_exp_condition['focal_shift(cm)'][i]
+            focal_shift = df_exp_condition['focal_shift'][i]
             sigma_s_list.append(f_sigma(focal_shift))
             alpha_regression_list.append(joblib_output[i][0])
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
 
             alpha_theoretical_list.append(f_alpha(T_average_list[i]))
 
-    df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift(cm)'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
+    df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_result_type']
                                    ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list})
 
@@ -622,6 +623,178 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
     sum_std = np.sum(weight_amp_phase_std)
 
     return sum_std, fig
+
+
+def coaxial_parallel_disk(r_i, r_j, L):
+    # L: gal between 2 disks
+    # i: sample
+    # j: target
+    # direction from i - > j
+    R_i = r_i / L
+    R_j = r_j / L
+    S = 1 + (1 + R_j ** 2) / R_i ** 2
+
+    F_ij = 0.5 * (S - np.sqrt(S ** 2 - 4 * (r_j / r_i) ** 2))
+
+    return F_ij
+
+
+def F_ring_LB_ring_sample(RI, RO, rm, dr, L):
+    F_RO_ring_rm = coaxial_parallel_disk(RO, rm + dr / 2, L) - coaxial_parallel_disk(RO, rm - dr / 2, L)
+
+    F_RI_ring_rm = coaxial_parallel_disk(RI, rm + dr / 2, L) - coaxial_parallel_disk(RI, rm - dr / 2, L)
+
+    return (RO ** 2 * F_RO_ring_rm - RI ** 2 * F_RI_ring_rm) / (RO ** 2 - RI ** 2)
+
+
+def F_IR_shield_ring_sample(rm, dr, W_IR, R_IRS):
+    # W distance between the IR shield to the sample
+    # R_IRS Radius of the IR shield, typically similar to the sample, maybe 3.75"
+
+    F_IRS_ring_rm = coaxial_parallel_disk(R_IRS, rm + dr / 2, W_IR) - coaxial_parallel_disk(R_IRS, rm - dr / 2, W_IR)
+
+    return F_IRS_ring_rm
+
+
+def F_back_chamber_wall_sample(rm, dr, W1, W2, R_chamber):
+    #R_chamber = 48.641e-3  # diameter of vacuum chamber
+
+    F_RO_W2 = coaxial_parallel_disk(rm + dr / 2, R_chamber, W1) - coaxial_parallel_disk(rm + dr / 2, R_chamber, W1 + W2)
+    F_RI_W2 = coaxial_parallel_disk(rm - dr / 2, R_chamber, W1) - coaxial_parallel_disk(rm - dr / 2, R_chamber, W1 + W2)
+
+    F_ring_W2 = ((rm + dr / 2) ** 2 * F_RO_W2 - (rm - dr / 2) ** 2 * F_RI_W2) / (2 * rm * dr)
+
+    F_W2_ring = rm * dr / (R_chamber * W2) * F_ring_W2
+
+    return F_W2_ring
+
+
+def calculator_coaxial_parallel_rings_view_factors(RI, RO, rm_array, dr, L):
+    F_list = []
+    for rm in rm_array:
+        F_list.append(F_ring_LB_ring_sample(RI, RO, rm, dr, L))
+
+    #     plt.plot(rm_array,F_list)
+    #     plt.xlabel("Location on sample (m)")
+    #     plt.ylabel("View factor")
+    #     # This seems quite wrong, lol
+
+    #     print("The total view factor between region on LB bounded by R = {:.2e} and R = {:.2e} is {}".format(RI, RO,np.sum(abs(np.array(F_list)))))
+
+    return np.array(F_list)
+
+
+def calculator_IR_shield_to_sample_view_factors(rm_array, dr, W_IR, R_IRS):
+    F_list = []
+    for rm in rm_array:
+        F_list.append(F_IR_shield_ring_sample(rm, dr, W_IR, R_IRS))
+
+    #     plt.plot(rm_array,F_list)
+    #     plt.xlabel("Location on sample (m)")
+    #     plt.ylabel("View factor")
+    #     # This seems quite wrong, lol
+
+    #     print("The total view factor of the IR shield is {}".format(np.sum(abs(np.array(F_list)))))
+
+    return np.array(F_list)
+
+
+def calculator_back_W2_ring_VF(rm_array, dr, W1, W2,R_chamber):
+    F_list = []
+    for rm in rm_array:
+        F_list.append(F_back_chamber_wall_sample(rm, dr, W1, W2,R_chamber))
+
+    #     plt.plot(rm_array,F_list)
+    #     plt.xlabel("Location on sample (m)")
+    #     plt.ylabel("View factor")
+    #     # This seems quite wrong, lol
+
+    #     print("The total view factor of the W2 is {}".format(np.sum(abs(np.array(F_list)))))
+
+    return np.array(F_list)
+
+
+def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,df_exp_condition):
+
+    sigma_sb = 5.67e-8 # stefan boltzmann constant
+
+    VDC = df_exp_condition['VDC']
+    focal_shift = df_exp_condition['focal_shift']
+
+    df_view_factor = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="view factors and T")
+
+    sample_name = sample_information['sample_name']
+    if sample_name == 'copper':
+        df_LB_temp = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                       sheet_name="LB temperature regions copper")
+        T_LB1 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R1'".format(VDC,focal_shift))
+        T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
+        T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
+    else:
+        df_LB_temp = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                   sheet_name="LB temperature regions graphite")
+
+        T_LB1 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R1'".format(VDC, focal_shift))
+        T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
+        T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
+
+
+    T_LBH = float(df_view_factor['T_LBH_C'])+273.15
+
+    T_LBW = float(df_view_factor['T_LBW_C'])+273.15
+
+    T_IRW = float(df_view_factor['T_IRW_C']) + 273.15
+    T_W1 = float(df_view_factor['T_W1_C'])+273.15
+    T_W2 = float(df_view_factor['T_W2_C'])+273.15
+
+    e_LB = float(df_view_factor['e_LB'])
+    e_LBW = float(df_view_factor['e_LBW'])
+    e_LBH = float(df_view_factor['e_LBH'])
+    e_IRW = float(df_view_factor['e_IRW'])
+    e_W1 = float(df_view_factor['e_W1'])
+    e_W2 = float(df_view_factor['e_W2'])
+
+    L_LB_sample = float(df_view_factor['L_LB_sample'])
+    R_LBH = float(df_view_factor['R_LBH'])
+    R_LB1 = float(df_view_factor['R_LB1'])
+    R_LB2 = float(df_view_factor['R_LB2'])
+    R_LB3 = float(df_view_factor['R_LB3'])
+    R_chamber = float(df_view_factor['R_chamber'])
+    R_IRW = float(df_view_factor['R_IRW'])
+    W1 = float(df_view_factor['W1'])
+    W2 = float(df_view_factor['W2'])
+
+    A_LBH_LB1 = np.pi * (R_LB1 ** 2 - R_LBH ** 2)
+    A_LB1_LB2 = np.pi * (R_LB2 ** 2 - R_LB1 ** 2)
+    A_LB2_LB3 = np.pi * (R_LB3 ** 2 - R_LB2 ** 2)
+    A_LBH = np.pi * R_LBH ** 2
+    A_LBW = 2 * np.pi * R_chamber * L_LB_sample
+
+    A_W1 = 2 * np.pi * R_chamber * W1
+    A_W2 = 2 * np.pi * R_chamber * W2
+    A_IRW = np.pi * R_chamber ** 2
+
+
+    C = calculator_coaxial_parallel_rings_view_factors(1e-4, R_LBH, rm_array, dr,
+                                                       L_LB_sample) * A_LBH * e_LBH * sigma_sb * T_LBH ** 4 \
+    + calculator_coaxial_parallel_rings_view_factors(R_LBH, R_LB1, rm_array, dr,
+                                                     L_LB_sample) * A_LBH_LB1 * e_LB * sigma_sb * T_LB1 ** 4 \
+    + calculator_coaxial_parallel_rings_view_factors(R_LB1, R_LB2, rm_array, dr,
+                                                     L_LB_sample) * A_LB1_LB2 * e_LB * sigma_sb * T_LB2 ** 4 \
+    + calculator_coaxial_parallel_rings_view_factors(R_LB2, R_LB3, rm_array, dr,
+                                                     L_LB_sample) * A_LB2_LB3 * e_LB * sigma_sb * T_LB3 ** 4 \
+    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, L_LB_sample, R_chamber) * A_LBW * e_LBW * sigma_sb * T_LBW ** 4 \
+    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber) * A_W1 * e_W1 * sigma_sb * T_W1 ** 4 \
+    + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 \
+    + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2,
+                                                  R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4
+
+
+    return C
+
+
+
 
 
 def select_data_points_radial_average_MA_match_model_grid(x0, y0, N_Rmax, pr, R_sample, theta_n,
@@ -998,6 +1171,55 @@ def light_source_intensity_vecterize(r_array, t_array, N_Rs, solar_simulator_set
 
     return q
 
+
+def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_settings,vacuum_chamber_setting,df_solar_simulator_VQ,sigma_s):
+
+
+    V_calib = np.array(df_solar_simulator_VQ['V_DC'])
+    focal_shift_calib = np.array(df_solar_simulator_VQ['focal_shift'])
+    Amax_fv_calib = np.array(df_solar_simulator_VQ['Amax_fv'])
+    f_calib = interp2d(V_calib, focal_shift_calib, Amax_fv_calib, kind='linear')
+
+    focal_shift = vacuum_chamber_setting['focal_shift']
+
+    f_heating = solar_simulator_settings['f_heating']
+    N_Rs = vacuum_chamber_setting['N_Rs']
+
+    V_AC = solar_simulator_settings['V_amplitude']
+    V_DC = solar_simulator_settings['V_DC']
+
+    """
+    # alternative method, slightly faster, do not require intensive interpolation
+    V_one_period = V_DC + V_AC * np.sin(2 * np.pi * f_heating * t_array_one_period)
+
+    idx = np.argsort(np.argsort(V_one_period))
+    # warning! interp2d ony takes sorted input, does not work for sinosoidal function as it is! Must keep track of the index before sorting!
+    Amax_fv_one_cycle = f_calib(V_one_period,focal_shift)[idx] 
+
+    Amax_fv_full_cycle = np.tile(Amax_fv_one_cycle,N_cycle)
+
+
+    sigma_d = float(df_solar_simulator_sigma.query("focal_shift == {}".format(focal_shift))['sigma'])
+
+    q = Amax_fv_full_cycle[:,np.newaxis]/np.pi*(sigma_d/(sigma_d**2 + r_array[np.newaxis, :] ** 2))
+
+    q[:,N_Rs:] = 0.0
+
+    """
+
+    V_full_cycles = V_DC + V_AC * np.sin(2 * np.pi * f_heating * t_array)
+
+    idx = np.argsort(np.argsort(V_full_cycles))
+    # warning! interp2d ony takes sorted input, does not work for sinosoidal function as it is! Must keep track of the index before sorting!
+    Amax_fv_full_cycle = f_calib(V_full_cycles, focal_shift)[idx]
+
+    q = Amax_fv_full_cycle[:, np.newaxis] / np.pi * (sigma_s / (sigma_s ** 2 + r_array[np.newaxis, :] ** 2))
+
+    q[:, N_Rs:] = 0.0
+
+    return q
+
+
 def lorentzian_Amax_sigma_estimation(d,code_directory):
 
     df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
@@ -1014,7 +1236,7 @@ def lorentzian_Amax_sigma_estimation(d,code_directory):
 
 
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
-                       light_source_property, numerical_simulation_setting):
+                       light_source_property, numerical_simulation_setting,df_solar_simulator_VQ):
 
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
@@ -1072,10 +1294,18 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
     vectorize = numerical_simulation_setting['vectorize']
 
+    sigma_s = light_source_property['sigma_s']
+
+
     if vectorize:
 
-        q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
-                                                   solar_simulator_settings, light_source_property)
+        # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
+        #                                            solar_simulator_settings, light_source_property)
+
+        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                           solar_simulator_settings, vacuum_chamber_setting, df_solar_simulator_VQ, sigma_s)
+
+
         T_temp = np.zeros(Nr)
         N_steady_count = 0
         time_index = Nt - 1
@@ -1158,8 +1388,8 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                   + dt / (rho * cp * dz) * (
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
-
-    print('alpha_r = {:.2E}, Amax = {:.2E}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(alpha_r, light_source_property['Amax'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name'],vacuum_chamber_setting['T_sur1']))
+    #print(vacuum_chamber_setting['focal_shift'])
+    print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name'],vacuum_chamber_setting['T_sur1']))
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
@@ -1173,7 +1403,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
 def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_phase_measurement, sample_information,
                                                  vacuum_chamber_setting, solar_simulator_settings,
-                                                 light_source_property, numerical_simulation_setting):
+                                                 light_source_property, numerical_simulation_setting,code_directory):
     #s_time = time.time()
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
@@ -1186,8 +1416,13 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
                         ((dr * N_outer) ** 2 - (dr * N_inner) ** 2) * np.pi)
     sample_information['T_initial'] = T_average
 
+
+    df_solar_simulator_VQ = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                          sheet_name="Amax_Fv_d_correlations")
+
+
     T_, time_T_, r_,N_one_cycle = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
-                                         light_source_property, numerical_simulation_setting)
+                       light_source_property, numerical_simulation_setting,df_solar_simulator_VQ)
     #s1_time = time.time()
 
     f_heating = solar_simulator_settings['f_heating']
@@ -1222,7 +1457,7 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
 
 
 def residual_update(params, df_temperature,df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-             solar_simulator_settings, light_source_property, numerical_simulation_setting):
+             solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory):
 
 
     error = None
@@ -1248,7 +1483,7 @@ def residual_update(params, df_temperature,df_amplitude_phase_measurement, sampl
                                                                           sample_information, vacuum_chamber_setting,
                                                                           solar_simulator_settings,
                                                                           light_source_property,
-                                                                          numerical_simulation_setting)
+                                                                          numerical_simulation_setting,code_directory)
 
     phase_relative_error = np.array([abs((measure - calculate) / measure) for measure, calculate in
                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])])
@@ -1282,19 +1517,19 @@ def residual_update(params, df_temperature,df_amplitude_phase_measurement, sampl
 
 
 def show_regression_results(param_name, regression_result, df_temperature, df_amplitude_phase_measurement,
-                            sample_information,vacuum_chamber_setting, solar_simulator_settings, light_source_property,numerical_simulation_setting):
+                            sample_information,vacuum_chamber_setting, solar_simulator_settings, light_source_property,numerical_simulation_setting,code_directory):
 
     if param_name == 'alpha_r':
         sample_information['alpha_r'] = regression_result
         title_text = 'alpha = {:.2E} m2/s, DC = {} V, d = {} cm'.format(regression_result,
                                                                               solar_simulator_settings['V_DC'],
-                                                                              vacuum_chamber_setting['focal_shift(cm)'])
+                                                                              vacuum_chamber_setting['focal_shift'])
 
     elif param_name == 'sigma_s':
         light_source_property['sigma_s'] = regression_result
         title_text = 'sigma_s = {:.2E}, DC = {} V, d = {} cm'.format(regression_result,
                                                                            solar_simulator_settings['V_DC'],
-                                                                           vacuum_chamber_setting['focal_shift(cm)'])
+                                                                           vacuum_chamber_setting['focal_shift'])
 
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(df_temperature,
                                                                                                      df_amplitude_phase_measurement,
@@ -1302,7 +1537,7 @@ def show_regression_results(param_name, regression_result, df_temperature, df_am
                                                                                                      vacuum_chamber_setting,
                                                                                                      solar_simulator_settings,
                                                                                                      light_source_property,
-                                                                                                     numerical_simulation_setting)
+                                                                                                     numerical_simulation_setting,code_directory)
 
     phase_relative_error = [abs((measure - calculate) / measure) for measure, calculate in
                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])]
@@ -1418,7 +1653,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     df_sample_cp_rho_alpha_all = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                                sheet_name="sample properties")
     df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="solar simulator Lorentzian")
+                                                  sheet_name="solar simulator Lorentzian Ang")
 
     df_solar_simulator_VI = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                           sheet_name="solar simulator VI")
@@ -1444,7 +1679,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
 
 
-    focal_shift = df_exp_condition['focal_shift(cm)']
+    focal_shift = float(df_exp_condition['focal_shift'])
     VDC = float(df_exp_condition['V_DC'])
 
     if df_exp_condition['regression_result_type'] == 'alpha_r':
@@ -1460,14 +1695,14 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                           'cp_c3': float(df_sample_cp_rho_alpha['cp_c3']), 'alpha_r': float(df_sample_cp_rho_alpha['alpha_r']),
                           'alpha_z': float(df_sample_cp_rho_alpha['alpha_z']), 'T_initial': None,
                           'emissivity': df_exp_condition['emissivity'],
-                          'absorptivity': df_exp_condition['absorptivity']}
+                          'absorptivity': df_exp_condition['absorptivity'],'sample_name':sample_name}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
 
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
                               'T_sur1': T_sur1, 'T_sur2': float(df_exp_condition['T_sur2']),
-                              'focal_shift(cm)':focal_shift,'R_analysis':int(df_exp_condition['R_analysis'])}
+                              'focal_shift':focal_shift,'R_analysis':int(df_exp_condition['R_analysis'])}
     # vacuum_chamber_setting
 
     numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
@@ -1488,12 +1723,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # numerical_simulation_setting
 
 
-    locations_relative_focal_plane = df_solar_simulator_lorentzian['Distance from focal plane(cm)']
-    Amax_relative_focal_plane = df_solar_simulator_lorentzian['Amax']
+    locations_relative_focal_plane = df_solar_simulator_lorentzian['focal_shift']
     sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
 
-    f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
-    f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='cubic')
+    f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
+
 
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
@@ -1501,7 +1735,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # solar_simulator_settings
     light_source_property = {'ks': float(df_solar_simulator_VI['ks']), 'bs': float(df_solar_simulator_VI['bs']),
                              'ka': float(df_solar_simulator_VI['ka']),
-                             'ba': float(df_solar_simulator_VI['ba']), 'Amax': f_Amax(focal_shift),
+                             'ba': float(df_solar_simulator_VI['ba']), 'Amax': None,
                              'sigma_s': f_sigma(focal_shift)}
     # light_source_property
 
@@ -1516,7 +1750,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
             out = lmfit.minimize(residual_update, params, args=(
             df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-            solar_simulator_settings, light_source_property, numerical_simulation_setting),
+            solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory),
                                  xtol=df_exp_condition['regression_residual_converging_criteria'])
 
             regression_result = out.params['alpha_r'].value
@@ -1526,7 +1760,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
             out = lmfit.minimize(residual_update, params, args=(
             df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-            solar_simulator_settings, light_source_property, numerical_simulation_setting),
+            solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory),
                                  xtol=df_exp_condition['regression_residual_converging_criteria'])
 
             regression_result = out.params['sigma_s'].value
@@ -1535,7 +1769,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
         res = optimize.minimize(residual_update, x0=float(df_exp_condition['p_initial']), args=(
             df_temperature, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
-            solar_simulator_settings, light_source_property, numerical_simulation_setting), method='nelder-mead',
+            solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory), method='nelder-mead',
                                 tol=df_exp_condition['regression_residual_converging_criteria'])
         regression_result = res['final_simplex'][0][0][0]
 
@@ -1544,7 +1778,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
         df_amplitude_phase_measurement, sample_information,
         vacuum_chamber_setting, solar_simulator_settings,
         light_source_property,
-        numerical_simulation_setting)
+        numerical_simulation_setting,code_directory)
 
     print("recording {} completed.".format(rec_name))
     return regression_result, diagnostic_figure, fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean
@@ -1700,7 +1934,7 @@ def parallel_temperature_average_batch_experimental_results_steady_state(df_exp_
         # Rmax = 125
         R_analysis = df_exp_condition['R_analysis']
         exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
-        focal_plane_relative_location = df_exp_condition['focal_shift(cm)']
+        focal_plane_relative_location = df_exp_condition['focal_shift']
 
         bb = df_exp_condition['anguler_range']
         bb = bb[1:-1]  # reac_excel read an element as an array
@@ -1766,7 +2000,7 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
         R_analysis = df_exp_condition['R_analysis']
         exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
 
-        focal_plane_location = df_exp_condition['focal_shift(cm)']
+        focal_plane_location = df_exp_condition['focal_shift']
         VDC = df_exp_condition['V_DC']
 
         bb = df_exp_condition['anguler_range']
@@ -2047,7 +2281,7 @@ def batch_process_steady_state_emission_spread_sheet(data_directory, code_direct
         emissivity_front = df_exp_condition['emissivity_front']
         emissivity_back = df_exp_condition['emissivity_back']
 
-        # focal_plane_location = df_exp_condition['focal_shift(cm)']
+        # focal_plane_location = df_exp_condition['focal_shift']
         # VDC = df_exp_condition['V_DC']
 
         file_names = [path + x for x in os.listdir(path)]
@@ -2070,7 +2304,7 @@ def batch_process_steady_state_emission_spread_sheet(data_directory, code_direct
     return df_DC_results
 
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
-                             solar_simulator_settings, light_source_property):
+                             solar_simulator_settings, light_source_property,code_directory):
     # X_input array is 2D array produced by python salib
     # X_2eN5 =saltelli.sample(f_2eN5_problem,500,calc_second_order=False, seed=42)
     # df_r_ref_locations just indicate how to calculate amplitude and phase, where is reference line
@@ -2107,7 +2341,7 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
                                                                                                      vacuum_chamber_setting,
                                                                                                      solar_simulator_settings,
                                                                                                      light_source_property,
-                                                                                                     numerical_simulation_setting)
+                                                                                                     numerical_simulation_setting,code_directory)
 
     df_amp_phase_simulated['f_heating'] = np.array([f_heating for i in range(len(df_amp_phase_simulated))])
 
@@ -2117,13 +2351,13 @@ def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_l
 
 
 def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
-                             solar_simulator_settings, light_source_property):
+                             solar_simulator_settings, light_source_property,code_directory):
     s_time = time.time()
     X_input_arrays = pickle.load(open(X_dump_file_name, 'rb')) # obtain pre-defined simulation conditions
 
     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
         delayed(sensitivity_model_output)(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
-                             solar_simulator_settings, light_source_property) for X_input_array in tqdm(X_input_arrays) for f_heating
+                             solar_simulator_settings, light_source_property,code_directory) for X_input_array in tqdm(X_input_arrays) for f_heating
         in f_heating_list)
 
     pickle.dump(joblib_output, open("sensitivity_results_" + X_dump_file_name, "wb"))
@@ -2185,7 +2419,7 @@ def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, d
 
 def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_temperature, df_r_ref_locations,
                                  sample_information, vacuum_chamber_setting, solar_simulator_settings,
-                                 light_source_property, numerical_simulation_setting):
+                                 light_source_property, numerical_simulation_setting,code_directory):
     for i, (parameter_name, DOE_parameter_value) in enumerate(zip(parameter_name_list, DOE_parameters)):
         # print(parameter_name)
         if parameter_name in sample_information.keys():
@@ -2207,7 +2441,7 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_tempera
                                                                                                      vacuum_chamber_setting,
                                                                                                      solar_simulator_settings,
                                                                                                      light_source_property,
-                                                                                                     numerical_simulation_setting)
+                                                                                                     numerical_simulation_setting,code_directory)
 
     return df_amp_phase_simulated
 
@@ -2222,7 +2456,7 @@ def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_
         print("Previous dump file existed, check if duplicate! The previous results are loaded.")
         joblib_output = pickle.load(open(result_dump_path, 'rb'))
     else:
-        joblib_output = Parallel(n_jobs=num_cores)(delayed(DOE_numerical_model_one_case)(parameter_name_list, DOE_parameters,df_temperature,df_r_ref_locations, sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting) for
+        joblib_output = Parallel(n_jobs=num_cores)(delayed(DOE_numerical_model_one_case)(parameter_name_list, DOE_parameters,df_temperature,df_r_ref_locations, sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting,code_directory) for
                                                   DOE_parameters in tqdm(DOE_parameters_complete))
 
         pickle.dump(joblib_output, open(result_dump_path, "wb"))
@@ -2465,7 +2699,7 @@ class MCMC_sampler:
         self.sample_information['alpha_r'] = np.exp(params['ln_alpha'])
         df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(self.df_temperature,
             self.df_amplitude_phase_measurement, self.sample_information, self.vacuum_chamber_setting,
-            self.solar_simulator_settings, self.light_source_property, self.numerical_simulation_setting)
+            self.solar_simulator_settings, self.light_source_property, self.numerical_simulation_setting,self.code_directory)
         mean_measured = np.array(
             [self.df_amplitude_phase_measurement['amp_ratio'], self.df_amplitude_phase_measurement['phase_diff']])
         mean_theoretical = np.array([df_amp_phase_simulated['amp_ratio'], df_amp_phase_simulated['phase_diff']])
