@@ -742,15 +742,11 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
         T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
         T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
 
-
     absorptivity_front = sample_information['absorptivity_front']
     absorptivity_back = sample_information['absorptivity_back']
 
-
     T_LBH = float(df_view_factor['T_LBH_C'])+273.15
-
     T_LBW = float(df_view_factor['T_LBW_C'])+273.15
-
     T_IRW = float(df_view_factor['T_IRW_C']) + 273.15
     T_W1 = float(df_view_factor['T_W1_C'])+273.15
     T_W2 = float(df_view_factor['T_W2_C'])+273.15
@@ -796,7 +792,63 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
     return Cm
 
 
+def mean_LB_temperatures(df_LB_temperature_details, focal_shift, VDC, R_inner_pixel, R_outer_pixel):
+    T_LB1 = df_LB_temperature_details.query(
+        'VDC == {} and focal_shift == {} and R_pixels>{} and R_pixels<{}'.format(VDC, focal_shift, R_inner_pixel,
+                                                                                 R_outer_pixel))
+    T_LB1.sort_values(by=['R_pixels'])
 
+    R_array = np.array(T_LB1['R_pixels'])
+    R_array = np.insert(R_array, 0, R_inner_pixel)
+    Area_list = R_array[1:] ** 2 - R_array[:-1] * 2
+    T_mean_C = np.sum(Area_list * np.array(T_LB1['T_C'])) / np.sum(Area_list)
+
+    return T_mean_C
+
+
+def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_details_csv):
+
+    VDC_array_unique = np.unique(np.array(df_LB_temperature_details_csv['VDC']))
+    focal_shift_array_unique = np.unique(np.array(df_LB_temperature_details_csv['focal_shift']))
+
+    R_LBH_pixel = 47
+    R_LB1_pixel = 69 # 1/3 LB
+    R_LB2_pixel = 138 # 2/3 LB
+    R_LB3_pixel = 207 #3/3 LB
+
+    T_RH_R1_list = []
+    T_R1_R2_list = []
+    T_R2_R3_list = []
+    VDC_list = []
+    focal_shift_list = []
+
+    for VDC in VDC_array_unique:
+        for focal_shift in focal_shift_array_unique:
+            T_LBR1_LBR2 = mean_LB_temperatures(df_LB_temperature_details_csv,focal_shift,VDC,R_LB1_pixel,R_LB2_pixel)
+            T_LBR2_LBR3 = mean_LB_temperatures(df_LB_temperature_details_csv,focal_shift,VDC,R_LB2_pixel,R_LB3_pixel)
+            T_LBH_LBR1 = 2*T_LBR1_LBR2 - T_LBR2_LBR3
+
+            T_RH_R1_list.append(T_LBH_LBR1)
+            T_R1_R2_list.append(T_LBR1_LBR2)
+            T_R2_R3_list.append(T_LBR2_LBR3)
+
+            VDC_list.append(VDC)
+            focal_shift_list.append(focal_shift)
+
+    df_mean_temp_C_LB_regions = pd.DataFrame({'VDC':VDC_list,'focal_shift':focal_shift_list,
+                                             'T_RH_R1':T_RH_R1_list,'T_R1_R2':T_R1_R2_list,'T_R2_R3':T_R2_R3_list})
+
+    LB_temp_focal_shift = df_mean_temp_C_LB_regions['focal_shift']
+    LB_temp_VDC = df_mean_temp_C_LB_regions['VDC']
+    T_RH_R1 = df_mean_temp_C_LB_regions['T_RH_R1']
+    T_R1_R2 = df_mean_temp_C_LB_regions['T_R1_R2']
+    T_R2_R3 = df_mean_temp_C_LB_regions['T_R2_R3']
+
+    f_T_RH_R1 = interp2d(LB_temp_VDC, LB_temp_focal_shift, T_RH_R1, kind='linear')
+    f_T_R1_R2 = interp2d(LB_temp_VDC, LB_temp_focal_shift, T_R1_R2, kind='linear')
+    f_T_R2_R3 = interp2d(LB_temp_VDC, LB_temp_focal_shift, T_R2_R3, kind='linear')
+
+    return f_T_RH_R1(actual_VDC,actual_focal_shift)[0],f_T_R1_R2(actual_VDC,actual_focal_shift)[0],f_T_R2_R3(actual_VDC,actual_focal_shift)[0]
 
 
 def select_data_points_radial_average_MA_match_model_grid(x0, y0, N_Rmax, pr, R_sample, theta_n,
