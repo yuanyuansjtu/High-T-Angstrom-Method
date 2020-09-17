@@ -714,12 +714,15 @@ def calculator_back_W2_ring_VF(rm_array, dr, W1, W2,R_chamber):
     return np.array(F_list)
 
 
-def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,df_exp_condition):
+def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,solar_simulator_settings,vacuum_chamber_setting):
+
+    # sample_information, vacuum_chamber_setting, solar_simulator_settings,
+    #                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ
 
     sigma_sb = 5.67e-8 # stefan boltzmann constant
 
-    VDC = df_exp_condition['VDC']
-    focal_shift = df_exp_condition['focal_shift']
+    VDC = solar_simulator_settings['VDC']
+    focal_shift = vacuum_chamber_setting['focal_shift']
 
     df_view_factor = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                                   sheet_name="view factors and T")
@@ -738,6 +741,10 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
         T_LB1 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R1'".format(VDC, focal_shift))
         T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
         T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
+
+
+    absorptivity_front = sample_information['absorptivity_front']
+    absorptivity_back = sample_information['absorptivity_back']
 
 
     T_LBH = float(df_view_factor['T_LBH_C'])+273.15
@@ -776,22 +783,17 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
     A_IRW = np.pi * R_chamber ** 2
 
 
-    C = calculator_coaxial_parallel_rings_view_factors(1e-4, R_LBH, rm_array, dr,
-                                                       L_LB_sample) * A_LBH * e_LBH * sigma_sb * T_LBH ** 4 \
-    + calculator_coaxial_parallel_rings_view_factors(R_LBH, R_LB1, rm_array, dr,
-                                                     L_LB_sample) * A_LBH_LB1 * e_LB * sigma_sb * T_LB1 ** 4 \
-    + calculator_coaxial_parallel_rings_view_factors(R_LB1, R_LB2, rm_array, dr,
-                                                     L_LB_sample) * A_LB1_LB2 * e_LB * sigma_sb * T_LB2 ** 4 \
-    + calculator_coaxial_parallel_rings_view_factors(R_LB2, R_LB3, rm_array, dr,
-                                                     L_LB_sample) * A_LB2_LB3 * e_LB * sigma_sb * T_LB3 ** 4 \
-    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, L_LB_sample, R_chamber) * A_LBW * e_LBW * sigma_sb * T_LBW ** 4 \
-    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber) * A_W1 * e_W1 * sigma_sb * T_W1 ** 4 \
-    + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 \
-    + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2,
-                                                  R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4
+    Cm = calculator_coaxial_parallel_rings_view_factors(1e-4, R_LBH, rm_array, dr,L_LB_sample) * A_LBH * e_LBH * sigma_sb * T_LBH ** 4 * absorptivity_front \
+    + calculator_coaxial_parallel_rings_view_factors(R_LBH, R_LB1, rm_array, dr,L_LB_sample) * A_LBH_LB1 * e_LB * sigma_sb * T_LB1 ** 4* absorptivity_front \
+    + calculator_coaxial_parallel_rings_view_factors(R_LB1, R_LB2, rm_array, dr,L_LB_sample) * A_LB1_LB2 * e_LB * sigma_sb * T_LB2 ** 4* absorptivity_front \
+    + calculator_coaxial_parallel_rings_view_factors(R_LB2, R_LB3, rm_array, dr,L_LB_sample) * A_LB2_LB3 * e_LB * sigma_sb * T_LB3 ** 4 * absorptivity_front\
+    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, L_LB_sample, R_chamber) * A_LBW * e_LBW * sigma_sb * T_LBW ** 4 * absorptivity_front \
+    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber) * A_W1 * e_W1 * sigma_sb * T_W1 ** 4 * absorptivity_back\
+    + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 * absorptivity_back \
+    + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2, R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4 * absorptivity_back
 
 
-    return C
+    return Cm
 
 
 
@@ -1235,6 +1237,9 @@ def lorentzian_Amax_sigma_estimation(d,code_directory):
     return f_Amax(d), f_sigma(d)
 
 
+"""
+# earlier version of the code, it assumes constant surrounding temperatures at front and back side of the sample
+
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting,df_solar_simulator_VQ):
 
@@ -1388,16 +1393,241 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                   + dt / (rho * cp * dz) * (
                                               absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
                                           p, m] ** 4)
+                    
     #print(vacuum_chamber_setting['focal_shift'])
     print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name'],vacuum_chamber_setting['T_sur1']))
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
+"""
 
 
+def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
+                       light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,code_directory):
+
+    df_view_factor = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="view factors and T")
+    T_LBW = df_view_factor['T_LBW_C'] + 273.15
+
+    R = sample_information['R']
+    Nr = numerical_simulation_setting['Nr']
+    t_z = sample_information['t_z']
+
+    Fo_criteria = numerical_simulation_setting['Fo_criteria']
+
+    dr = R / Nr
+    dz = t_z
+
+    rho = sample_information['rho']
+    cp_const = sample_information['cp_const']  # Cp = cp_const + cp_c1*T+ cp_c2*T**2+cp_c3*T**3, T unit in K
+    cp_c1 = sample_information['cp_c1']
+    cp_c2 = sample_information['cp_c2']
+    cp_c3 = sample_information['cp_c3']
+    alpha_r = sample_information['alpha_r']
+    alpha_z = sample_information['alpha_z']
+    R0 = vacuum_chamber_setting['R0']
+
+    T_initial = sample_information['T_initial']  # unit in K
+    # k = alpha*rho*cp
+
+    f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
+    N_cycle = numerical_simulation_setting['N_cycle']
+
+    T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
+    T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
+
+    frequency_analysis_method = numerical_simulation_setting['frequency_analysis_method']
+
+    emissivity_front = sample_information['emissivity_front']  # assumed to be constant
+    emissivity_back = sample_information['emissivity_back']  # assumed to be constant
+
+    absorptivity_front = sample_information['absorptivity_front']  # assumed to be constant
+    absorptivity_back = sample_information['absorptivity_back']  # assumed to be constant
+
+    sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
+
+    # print(N_cycle)
+    # print(f_heating)
+    dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
+             1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
+
+    t_total = 1 / f_heating * N_cycle  # total simulation time
+
+    Nt = int(t_total / dt)  # total number of simulation time step
+    time_simulation = dt * np.arange(Nt)
+    r = np.arange(Nr)
+    rm = r * dr
+
+    Fo_r = alpha_r * dt / dr ** 2
+
+    # Rs = vacuum_chamber_setting['Rs']  # the location where the solar light shines on the sample
+    # N_Rs = int(Rs / R * Nr)
+
+    N_Rs = int(vacuum_chamber_setting['N_Rs'])  # max pixels that solar light shine upon
+
+    T = T_initial * np.ones((Nt, Nr))
+
+    vectorize = numerical_simulation_setting['vectorize']
+    view_factor_setting = numerical_simulation_setting['numerical_simulation_setting']
+
+    sigma_s = light_source_property['sigma_s']
+
+    if (vectorize and view_factor_setting == False):
+
+        # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
+        #                                            solar_simulator_settings, light_source_property)
+
+        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                           solar_simulator_settings, vacuum_chamber_setting,
+                                                           df_solar_simulator_VQ, sigma_s)
+
+        T_temp = np.zeros(Nr)
+        N_steady_count = 0
+        time_index = Nt - 1
+        N_one_cycle = int(Nt / N_cycle)
+        # A_initial = 100
+
+        for p in range(Nt - 1):  # p indicate time step
+
+            cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
+            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - sigma_sb * (emissivity_front + emissivity_back) * dt / (
+                        rho * cp * dz) * T[p, 0] ** 4 + \
+                          dt / (rho * cp * dz) * (
+                                      absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front *
+                                      q_solar[p, 0])
+
+            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (
+                        rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
+                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front * q_solar[p,1:-1] - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
+
+            cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
+            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) - dt * (emissivity_front + emissivity_back) * sigma_sb / (rho * cp) * (1 / dz + 1 / dr) * \
+                           T[p, -1] ** 4 + 2 * Fo_r * T[p, -2] + \
+                           dt / (rho * cp * dz) * (absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front *q_solar[p, -1]) \
+                           + 2 * dt / (rho * cp * dr) * absorptivity_back * sigma_sb * T_sur2 ** 4
+
+            if (p > 0) & (p % N_one_cycle == 0) & (frequency_analysis_method != 'fft'):
+                A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
+                A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
+                if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 1e-2:
+                    N_steady_count += 1
+                    if N_steady_count == 2:  # only need 2 periods to calculate amplitude and phase
+                        time_index = p
+                        print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                            int(p / N_one_cycle)))
+                        break
+                T_temp = T[p, :]
+
+            if p == Nt - 2:
+                time_index = p
+                # T_temp = T[p, :]
+                print("Error! No stable temperature profile was obtained!")
+
+    elif (vectorize and view_factor_setting == True):
 
 
+        Cm = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, vacuum_chamber_setting, solar_simulator_settings)
 
+        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                           solar_simulator_settings, vacuum_chamber_setting,
+                                                           df_solar_simulator_VQ, sigma_s)
+
+        T_temp = np.zeros(Nr)
+        N_steady_count = 0
+        time_index = Nt - 1
+        N_one_cycle = int(Nt / N_cycle)
+        # A_initial = 100
+
+        for p in range(Nt - 1):  # p indicate time step
+
+            # The node at center of the disk
+            cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
+
+            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - sigma_sb * (emissivity_back + emissivity_front) * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
+                          dt / (rho * cp * dz) * (absorptivity_front * q_solar[p, 0] + 4*Cm[0]/(np.pi*dr**2))
+
+
+            # The node in the middle of disk
+            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
+                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * q_solar[p,1:-1] + Cm[1:-1]/(2*np.pi*rm[1:-1]*dr) - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
+
+
+            # The node at the edge of the disk
+            cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
+            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) + 2 * Fo_r *T [p, -2] + absorptivity_front*dt*q_solar[p, -1]/(dz*rho*cp) + 2*rm[-1]*absorptivity_front*sigma_sb*dt*T_LBW**4/((rm[-1]-dr/2)*dr*rho*cp) + Cm[-1]*dt/(np.pi*(rm[-1]-dr/2)*dr*dz*rho*cp) - \
+                           (emissivity_front+emissivity_back)*sigma_sb*dt/(dz*rho*cp)*T[p, -1]**4 - 2*rm[-1]*emissivity_back*sigma_sb*dt*T[p, -1]**4/((rm[-1]-dr/2)*dr*rho*cp)
+
+
+            if (p > 0) & (p % N_one_cycle == 0) & (frequency_analysis_method != 'fft'):
+                A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
+                A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
+                if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 1e-2:
+                    N_steady_count += 1
+                    if N_steady_count == 2:  # only need 2 periods to calculate amplitude and phase
+                        time_index = p
+                        print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                            int(p / N_one_cycle)))
+                        break
+                T_temp = T[p, :]
+
+            if p == Nt - 2:
+                time_index = p
+                # T_temp = T[p, :]
+                print("Error! No stable temperature profile was obtained!")
+
+
+    else: # do not use non-vectorized code whenever possible, runs too slow
+        q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
+        time_index = Nt - 1
+
+        for i in range(N_Rs):  # truncated solar light
+            for j in range(Nt):
+                q_solar[j, i] = light_source_intensity(i * dr, j * dt, solar_simulator_settings, light_source_property)
+
+        for p in range(Nt - 1):  # p indicate time step
+            for m in range(Nr):  # m indicate node along radial direction
+                rm = dr * m
+                cp = cp_const + cp_c1 * T[p, m] + cp_c2 * T[p, m] ** 2 + cp_c3 * T[p, m] ** 3
+
+                if m == 0:
+                    # consider V1
+                    T[p + 1, m] = T[p, m] + 4 * Fo_r * (T[p, m + 1] - T[p, m]) + \
+                                  dt / (rho * cp * dz) * (
+                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
+                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) + \
+                                  dt / (rho * cp * dz) * (
+                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
+                                      p, m] ** 4)
+
+                elif m == Nr - 1:
+                    # consider V2
+                    T[p + 1, m] = T[p, m] + 2 * (rm - dr / 2) / rm * Fo_r * (T[p, m - 1] - T[p, m]) + \
+                                  dt / (rho * cp * dz) * (
+                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
+                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) \
+                                  + 2 * dt / (rho * cp * dr) * (
+                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
+                                      p, m] ** 4) \
+                                  + dt / (rho * cp * dz) * (
+                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
+                                      p, m] ** 4)
+
+                elif m >= 1 and m != Nr - 1:
+                    # Consider E1
+                    T[p + 1, m] = T[p, m,] + Fo_r * (rm - dr / 2) / rm * (T[p, m - 1] - T[p, m]) + Fo_r * (
+                            rm + dr / 2) / rm * (T[p, m + 1] - T[p, m]) \
+                                  + dt / (rho * cp * dz) * (
+                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
+                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) \
+                                  + dt / (rho * cp * dz) * (
+                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
+                                      p, m] ** 4)
+
+    print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
+        alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
+        solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
+
+    return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
 
 
