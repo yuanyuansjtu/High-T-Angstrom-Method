@@ -721,26 +721,25 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
 
     sigma_sb = 5.67e-8 # stefan boltzmann constant
 
-    VDC = solar_simulator_settings['VDC']
+    VDC = solar_simulator_settings['V_DC']
     focal_shift = vacuum_chamber_setting['focal_shift']
 
-    df_view_factor = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="view factors and T")
+    df_view_factor = pd.read_csv(code_directory + "sample specifications//view factors and T.csv")
 
     sample_name = sample_information['sample_name']
-    if sample_name == 'copper':
-        df_LB_temp = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                       sheet_name="LB temperature regions copper")
-        T_LB1 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R1'".format(VDC,focal_shift))
-        T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
-        T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
-    else:
-        df_LB_temp = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                   sheet_name="LB temperature regions graphite")
 
-        T_LB1 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R1'".format(VDC, focal_shift))
-        T_LB2 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R2'".format(VDC, focal_shift))
-        T_LB3 = df_LB_temp.query("VDC == {} and focal_distance_cm=={} and Region == 'R3'".format(VDC, focal_shift))
+
+
+    if sample_name == 'copper':
+        df_LB_temp = pd.read_csv(code_directory + "sample specifications//LB temperature details copper.csv")
+    else:
+        df_LB_temp = pd.read_csv(code_directory + "sample specifications//LB temperature details graphite.csv")
+
+    T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
+
+    T_LB1 = T_LB1_C + 273.15
+    T_LB2 = T_LB2_C + 273.15
+    T_LB3 = T_LB3_C + 273.15
 
     absorptivity_front = sample_information['absorptivity_front']
     absorptivity_back = sample_information['absorptivity_back']
@@ -788,8 +787,8 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
     + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 * absorptivity_back \
     + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2, R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4 * absorptivity_back
 
-
-    return Cm
+    Cm[0] = 0
+    return Cm, T_LB_mean_C
 
 
 def mean_LB_temperatures(df_LB_temperature_details, focal_shift, VDC, R_inner_pixel, R_outer_pixel):
@@ -848,7 +847,12 @@ def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_
     f_T_R1_R2 = interp2d(LB_temp_VDC, LB_temp_focal_shift, T_R1_R2, kind='linear')
     f_T_R2_R3 = interp2d(LB_temp_VDC, LB_temp_focal_shift, T_R2_R3, kind='linear')
 
-    return f_T_RH_R1(actual_VDC,actual_focal_shift)[0],f_T_R1_R2(actual_VDC,actual_focal_shift)[0],f_T_R2_R3(actual_VDC,actual_focal_shift)[0]
+    T_LB1_C = f_T_RH_R1(actual_VDC,actual_focal_shift)[0]
+    T_LB2_C = f_T_R1_R2(actual_VDC,actual_focal_shift)[0]
+    T_LB3_C = f_T_R2_R3(actual_VDC,actual_focal_shift)[0]
+
+    T_LB_mean = (T_LB1_C*(R_LB1_pixel**2 - R_LBH_pixel**2) + T_LB2_C*(R_LB2_pixel**2 - R_LB1_pixel*2) + T_LB3_C*(R_LB3_pixel**2 - R_LB2_pixel**2))/(R_LB3_pixel**2 - R_LBH_pixel**2)
+    return T_LB1_C, T_LB2_C, T_LB3_C, T_LB_mean
 
 
 def select_data_points_radial_average_MA_match_model_grid(x0, y0, N_Rmax, pr, R_sample, theta_n,
@@ -1457,9 +1461,9 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,code_directory):
 
-    df_view_factor = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="view factors and T")
-    T_LBW = df_view_factor['T_LBW_C'] + 273.15
+    df_view_factor = pd.read_csv(code_directory + "sample specifications//view factors and T.csv")
+
+    T_LBW = float(df_view_factor['T_LBW_C'][0]) + 273.15
 
     R = sample_information['R']
     Nr = numerical_simulation_setting['Nr']
@@ -1485,8 +1489,6 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
     N_cycle = numerical_simulation_setting['N_cycle']
 
-    T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
-    T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
 
     frequency_analysis_method = numerical_simulation_setting['frequency_analysis_method']
 
@@ -1520,11 +1522,14 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     T = T_initial * np.ones((Nt, Nr))
 
     vectorize = numerical_simulation_setting['vectorize']
-    view_factor_setting = numerical_simulation_setting['numerical_simulation_setting']
+    view_factor_setting = numerical_simulation_setting['view_factor_setting']
 
     sigma_s = light_source_property['sigma_s']
 
     if (vectorize and view_factor_setting == False):
+
+        T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
+        T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
 
         # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
         #                                            solar_simulator_settings, light_source_property)
@@ -1575,10 +1580,15 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 # T_temp = T[p, :]
                 print("Error! No stable temperature profile was obtained!")
 
+        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
+            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
+            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
+
+
     elif (vectorize and view_factor_setting == True):
 
 
-        Cm = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, vacuum_chamber_setting, solar_simulator_settings)
+        Cm,T_LB_mean_C = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, solar_simulator_settings,vacuum_chamber_setting)
 
         q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
                                                            solar_simulator_settings, vacuum_chamber_setting,
@@ -1627,8 +1637,17 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 # T_temp = T[p, :]
                 print("Error! No stable temperature profile was obtained!")
 
+        print('alpha_r = {:.2E}, focal plane = {} cm, sigma_s = {:.2E}, f_heating = {} Hz, Rec = {}, T_LB_mean = {:.1f} K.'.format(
+            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
+            solar_simulator_settings['rec_name'], T_LB_mean_C + 273.15))
+
 
     else: # do not use non-vectorized code whenever possible, runs too slow
+
+        T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
+        T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
+
+
         q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
         time_index = Nt - 1
 
@@ -1675,9 +1694,9 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                           absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
                                       p, m] ** 4)
 
-    print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
-        alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-        solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
+        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
+            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
+            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
@@ -1699,12 +1718,11 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
     sample_information['T_initial'] = T_average
 
 
-    df_solar_simulator_VQ = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                          sheet_name="Amax_Fv_d_correlations")
+    df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//Amax_Fv_d_correlations.csv")
 
 
     T_, time_T_, r_,N_one_cycle = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
-                       light_source_property, numerical_simulation_setting,df_solar_simulator_VQ)
+                       light_source_property, numerical_simulation_setting,df_solar_simulator_VQ,code_directory)
     #s1_time = time.time()
 
     f_heating = solar_simulator_settings['f_heating']
@@ -1949,13 +1967,14 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
+    view_factor_setting = df_exp_condition['view_factor_setting']
 
 
     regression_module = df_exp_condition['regression_module']
 
-    LB_temp_focal_shift = df_LB_temperature['focal_distance(cm)']
+    LB_temp_focal_shift = df_LB_temperature['focal_shift']
     LB_temp_VDC = df_LB_temperature['VDC']
-    LB_temp = df_LB_temperature['T(C)']
+    LB_temp = df_LB_temperature['T_C']
 
     f_LB_temp = interp2d(LB_temp_VDC, LB_temp_focal_shift, LB_temp, kind='linear')
 
@@ -1976,8 +1995,11 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                               float(df_sample_cp_rho_alpha['cp_c1']), 'cp_c2': float(df_sample_cp_rho_alpha['cp_c2']),
                           'cp_c3': float(df_sample_cp_rho_alpha['cp_c3']), 'alpha_r': float(df_sample_cp_rho_alpha['alpha_r']),
                           'alpha_z': float(df_sample_cp_rho_alpha['alpha_z']), 'T_initial': None,
-                          'emissivity': df_exp_condition['emissivity'],
-                          'absorptivity': df_exp_condition['absorptivity'],'sample_name':sample_name}
+                          'emissivity_front': df_exp_condition['emissivity_front'],
+                          'absorptivity_front': df_exp_condition['absorptivity_front'],
+                          'emissivity_back': df_exp_condition['emissivity_back'],
+                          'absorptivity_back': df_exp_condition['absorptivity_back'],
+                          'sample_name':sample_name}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
@@ -1998,7 +2020,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                                     'regression_method': df_exp_condition['regression_method'],
                                     'regression_result_type': df_exp_condition['regression_result_type'],
                                     'regression_residual_converging_criteria': df_exp_condition[
-                                        'regression_residual_converging_criteria']
+                                        'regression_residual_converging_criteria'],'view_factor_setting':df_exp_condition['view_factor_setting']
                                     }
     # the code is executed using vectorized approach by default
 
