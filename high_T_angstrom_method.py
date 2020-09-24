@@ -1961,6 +1961,9 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     df_LB_temperature = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                       sheet_name="LB temperature")
 
+    df_thermal_diffusivity_temperature_all = pd.read_csv(code_directory + "sample specifications//sample properties.xlsx",
+                                      sheet_name="thermal diffusivity")
+
     sample_name = df_exp_condition['sample_name']
     df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
 
@@ -1989,11 +1992,27 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
         T_sur1 = df_exp_condition['T_sur2']
 
 
+    # We need to evaluate the sample's average temperature in the region of analysis, and feed in a thermal diffusivity value from a reference source, this will be important for sigma measurement
+
+    R0 = int(df_exp_condition['R0'])
+    R_analysis  = int(df_exp_condition['R_analysis'])
+
+    T_average = np.sum(
+        [2 * np.pi *  m_ *  np.mean(df_temperature.iloc[:, m_]) for m_ in np.arange(R0, R_analysis+R0, 1)]) / (
+                        ((R_analysis+R0) ** 2 - (R0) ** 2) * np.pi) # unit in K
+
+    df_thermal_diffusivity_temperature = df_thermal_diffusivity_temperature_all.query("sample_name=='{}'".format(sample_name))
+
+    f_thermal_duffisivity_T = interp1d(df_thermal_diffusivity_temperature['Temperature C'], df_thermal_diffusivity_temperature['Thermal diffsivity'])
+
+    alpha_r = f_thermal_duffisivity_T(T_average - 273.15) #convert back to C
+
+
     sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
                           'rho': float(df_sample_cp_rho_alpha['rho']),
                           'cp_const': float(df_sample_cp_rho_alpha['cp_const']), 'cp_c1':
                               float(df_sample_cp_rho_alpha['cp_c1']), 'cp_c2': float(df_sample_cp_rho_alpha['cp_c2']),
-                          'cp_c3': float(df_sample_cp_rho_alpha['cp_c3']), 'alpha_r': float(df_sample_cp_rho_alpha['alpha_r']),
+                          'cp_c3': float(df_sample_cp_rho_alpha['cp_c3']), 'alpha_r': alpha_r,
                           'alpha_z': float(df_sample_cp_rho_alpha['alpha_z']), 'T_initial': None,
                           'emissivity_front': df_exp_condition['emissivity_front'],
                           'absorptivity_front': df_exp_condition['absorptivity_front'],
@@ -2004,9 +2023,9 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
 
-    vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': int(df_exp_condition['R0']),
+    vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': R0,
                               'T_sur1': T_sur1, 'T_sur2': float(df_exp_condition['T_sur2']),
-                              'focal_shift':focal_shift,'R_analysis':int(df_exp_condition['R_analysis'])}
+                              'focal_shift':focal_shift,'R_analysis':R_analysis}
     # vacuum_chamber_setting
 
     numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
