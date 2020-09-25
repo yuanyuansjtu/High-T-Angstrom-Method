@@ -208,7 +208,7 @@ def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreads
 def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_condition_spreadsheet_filename):
 
     T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
-    df_exp_condition = pd.read_excel("batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                                   sheet_name="solar simulator Lorentzian Ang")
@@ -729,11 +729,12 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
     sample_name = sample_information['sample_name']
 
 
+    df_LB_details_all = pd.read_csv(code_directory + "sample specifications//LB temperature details sept 2020.csv")
 
     if sample_name == 'copper':
-        df_LB_temp = pd.read_csv(code_directory + "sample specifications//LB temperature details copper.csv")
+        df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
     else:
-        df_LB_temp = pd.read_csv(code_directory + "sample specifications//LB temperature details graphite.csv")
+        df_LB_temp = df_LB_details_all.query("Material == '{}'".format('graphite_poco'))
 
     T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
 
@@ -1961,7 +1962,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     df_LB_temperature = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                       sheet_name="LB temperature")
 
-    df_thermal_diffusivity_temperature_all = pd.read_csv(code_directory + "sample specifications//sample properties.xlsx",
+    df_thermal_diffusivity_temperature_all = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                       sheet_name="thermal diffusivity")
 
     sample_name = df_exp_condition['sample_name']
@@ -2001,7 +2002,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
         [2 * np.pi *  m_ *  np.mean(df_temperature.iloc[:, m_]) for m_ in np.arange(R0, R_analysis+R0, 1)]) / (
                         ((R_analysis+R0) ** 2 - (R0) ** 2) * np.pi) # unit in K
 
-    df_thermal_diffusivity_temperature = df_thermal_diffusivity_temperature_all.query("sample_name=='{}'".format(sample_name))
+    df_thermal_diffusivity_temperature = df_thermal_diffusivity_temperature_all.query("Material=='{}'".format(sample_name))
 
     f_thermal_duffisivity_T = interp1d(df_thermal_diffusivity_temperature['Temperature C'], df_thermal_diffusivity_temperature['Thermal diffsivity'])
 
@@ -2358,84 +2359,6 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
 
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
     df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
-
-    # df_exp_condition_spreadsheet = df_exp_condition_spreadsheet[:5]
-
-
-
-
-    # parallel_result_summary
-    # diagnostic_figure_list = []
-    # df_temperature_list = []
-    # df_amplitude_phase_measurement_list = []
-    #
-    # for i in range(len(df_exp_condition_spreadsheet)):
-    #
-    #     df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
-    #
-    #     rec_name = df_exp_condition['rec_name']
-    #     path = data_directory + str(rec_name) + "//"
-    #
-    #     output_name = rec_name
-    #     # num_cores = df_exp_condition['num_cores']
-    #
-    #     method = "MA"  # default uses Mosfata's code
-    #     # print(method)
-    #
-    #     x0 = df_exp_condition['x0']  # in pixels
-    #     y0 = df_exp_condition['y0']  # in pixels
-    #     Rmax = df_exp_condition['Rmax']  # in pixels
-    #     # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
-    #     pr = df_exp_condition['pr']
-    #     # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
-    #
-    #     # After obtaining temperature profile, next we obtain amplitude and phase
-    #     f_heating = df_exp_condition['f_heating']
-    #     # 1cm ->35
-    #     R0 = df_exp_condition['R0']
-    #     gap = df_exp_condition['gap']
-    #     # Rmax = 125
-    #     R_analysis = df_exp_condition['R_analysis']
-    #     exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
-    #
-    #     bb = df_exp_condition['anguler_range']
-    #     bb = bb[1:-1] # reac_excel read an element as an array
-    #     index = None
-    #     angle_range = []
-    #     while (index != -1):
-    #         index = bb.find("],[")
-    #         element = bb[:index]
-    #         d = element.find(",")
-    #         element_after_comma = element[d + 1:]
-    #         element_before_comma = element[element.find("[") + 1:d]
-    #         # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
-    #         bb = bb[index + 2:]
-    #         angle_range.append([int(element_before_comma),int(element_after_comma)])
-    #
-    #
-    #
-    #     sum_std, diagnostic_figure = check_angular_uniformity(x0, y0, Rmax, pr, path, rec_name, output_name, method,
-    #                                                           num_cores, f_heating, R0, gap, R_analysis,angle_range,
-    #                                                           exp_amp_phase_extraction_method,code_directory)
-    #
-    #
-    #
-    #     regression_method = df_exp_condition['regression_method']
-    #     regression_module = df_exp_condition['regression_module'] # lmfit and scipy.optimize, these modules requires different return from residual function
-    #
-    #     diagnostic_figure_list.append(diagnostic_figure)
-    #
-    #     df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
-    #                                                                            rec_name, output_name, method, num_cores,code_directory)
-    #
-    #     # radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name, output_name, method, num_cores, code_directory):  # unit in K
-    #
-    #     df_amplitude_phase_measurement = batch_process_horizontal_lines(df_temperature, f_heating, R0, gap, R_analysis,
-    #                                                                     exp_amp_phase_extraction_method)
-    #     df_temperature_list.append(df_temperature)
-    #     df_amplitude_phase_measurement_list.append(df_amplitude_phase_measurement)
-
-    # regression_result, diagnostic_figure, regression_figure, sum_std,T_average = high_T_Angstrom_execute_one_case(df_exp_condition,data_directory)
 
     diagnostic_figure_list, df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
 
