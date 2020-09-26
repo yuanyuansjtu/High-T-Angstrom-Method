@@ -215,7 +215,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
     locations_relative_focal_plane = df_solar_simulator_lorentzian_sigma['focal_shift']
 
-    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma_s']
 
     # f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
     f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
@@ -1724,7 +1724,7 @@ def simulation_result_amplitude_phase_extraction(df_temperature, df_amplitude_ph
     sample_information['T_initial'] = T_average
 
 
-    df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//Amax_Fv_d_correlations.csv")
+    df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//9_14_Amax_Fv_d_correlations.csv")
 
 
     T_, time_T_, r_,N_one_cycle = radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
@@ -2054,7 +2054,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
 
     locations_relative_focal_plane = df_solar_simulator_lorentzian_sigma['focal_shift']
-    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma_s']
 
     f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
 
