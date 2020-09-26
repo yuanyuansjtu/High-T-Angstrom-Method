@@ -210,12 +210,12 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
     T_average_list = [joblib_output_[3] for joblib_output_ in joblib_output]
     df_exp_condition = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
-    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="solar simulator Lorentzian Ang")
+    df_solar_simulator_lorentzian_sigma = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="Lorentzian sigma")
 
-    locations_relative_focal_plane = df_solar_simulator_lorentzian['focal_shift']
+    locations_relative_focal_plane = df_solar_simulator_lorentzian_sigma['focal_shift']
 
-    sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma']
 
     # f_Amax = interp1d(locations_relative_focal_plane, Amax_relative_focal_plane, kind='cubic')
     f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
@@ -258,7 +258,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_result_type']
-                                   ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list})
+                                   ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list,'regression_method':df_exp_condition['regression_method']})
 
 
     return df_results_all
@@ -826,7 +826,12 @@ def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_
         for focal_shift in focal_shift_array_unique:
             T_LBR1_LBR2 = mean_LB_temperatures(df_LB_temperature_details_csv,focal_shift,VDC,R_LB1_pixel,R_LB2_pixel)
             T_LBR2_LBR3 = mean_LB_temperatures(df_LB_temperature_details_csv,focal_shift,VDC,R_LB2_pixel,R_LB3_pixel)
-            T_LBH_LBR1 = 2*T_LBR1_LBR2 - T_LBR2_LBR3
+            T_LBH_LBR1_temp = mean_LB_temperatures(df_LB_temperature_details_csv,focal_shift,VDC,R_LBH_pixel,R_LB1_pixel)
+
+            if T_LBH_LBR1_temp>0: # just check if T_LBH_LBR1 is a number
+                T_LBH_LBR1 = T_LBH_LBR1_temp
+            else:
+                T_LBH_LBR1 = 2*T_LBR1_LBR2 - T_LBR2_LBR3
 
             T_RH_R1_list.append(T_LBH_LBR1)
             T_R1_R2_list.append(T_LBR1_LBR2)
@@ -852,7 +857,7 @@ def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_
     T_LB2_C = f_T_R1_R2(actual_VDC,actual_focal_shift)[0]
     T_LB3_C = f_T_R2_R3(actual_VDC,actual_focal_shift)[0]
 
-    T_LB_mean = (T_LB1_C*(R_LB1_pixel**2 - R_LBH_pixel**2) + T_LB2_C*(R_LB2_pixel**2 - R_LB1_pixel*2) + T_LB3_C*(R_LB3_pixel**2 - R_LB2_pixel**2))/(R_LB3_pixel**2 - R_LBH_pixel**2)
+    T_LB_mean = (T_LB1_C*(R_LB1_pixel**2 - R_LBH_pixel**2) + T_LB2_C*(R_LB2_pixel**2 - R_LB1_pixel**2) + T_LB3_C*(R_LB3_pixel**2 - R_LB2_pixel**2))/(R_LB3_pixel**2 - R_LBH_pixel**2)
     return T_LB1_C, T_LB2_C, T_LB3_C, T_LB_mean
 
 
@@ -1788,6 +1793,7 @@ def residual_update(params, df_temperature,df_amplitude_phase_measurement, sampl
 
     phase_relative_error = np.array([abs((measure - calculate) / measure) for measure, calculate in
                             zip(df_amplitude_phase_measurement['phase_diff'], df_amp_phase_simulated['phase_diff'])])
+
     amplitude_relative_error = np.array([abs((measure - calculate) / measure) for measure, calculate in
                                 zip(df_amplitude_phase_measurement['amp_ratio'], df_amp_phase_simulated['amp_ratio'])])
 
@@ -1953,8 +1959,8 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
     df_sample_cp_rho_alpha_all = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                                sheet_name="sample properties")
-    df_solar_simulator_lorentzian = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-                                                  sheet_name="solar simulator Lorentzian Ang")
+    df_solar_simulator_lorentzian_sigma = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
+                                                  sheet_name="Lorentzian sigma")
 
     df_solar_simulator_VI = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
                                           sheet_name="solar simulator VI")
@@ -2047,8 +2053,8 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     # numerical_simulation_setting
 
 
-    locations_relative_focal_plane = df_solar_simulator_lorentzian['focal_shift']
-    sigma_relative_focal_plane = df_solar_simulator_lorentzian['sigma']
+    locations_relative_focal_plane = df_solar_simulator_lorentzian_sigma['focal_shift']
+    sigma_relative_focal_plane = df_solar_simulator_lorentzian_sigma['sigma']
 
     f_sigma = interp1d(locations_relative_focal_plane, sigma_relative_focal_plane, kind='linear')
 
@@ -2414,8 +2420,13 @@ def display_high_dimensional_regression_results(x_name, y_name, row_name, column
             df_results_all_ = df_results_all.query("{}=={} and {} == {}".format(row_name, row, column_name, column))
             # VDC_list = np.unique(df_results_all_['VDC'])
             for series in series_items:
-                df_ = df_results_all_.query("{}=={}".format(series_name, series))
-                axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+                if type(series) == str:
+                    df_ = df_results_all_.query("{}=='{}'".format(series_name, series))
+                    axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = '{}'".format(series_name, series))
+                else:
+                    df_ = df_results_all_.query("{}=={}".format(series_name, series))
+                    axes[i, j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+
                 axes[i, j].set_xlabel(x_name)
                 axes[i, j].set_ylabel(y_name)
                 axes[i, j].set_ylim(ylim)
@@ -2436,8 +2447,13 @@ def display_high_dimensional_regression_results_one_row(x_name, y_name, column_n
         df_results_all_ = df_results_all.query("{} == {}".format(column_name, column))
 
         for series in series_items:
-            df_ = df_results_all_.query("{}=={}".format(series_name, series))
-            axes[j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+            if type(series) == str:
+                df_ = df_results_all_.query("{}=='{}'".format(series_name, series))
+                axes[j].scatter(df_[x_name], df_[y_name], label="{} = '{}'".format(series_name, series))
+            else:
+                df_ = df_results_all_.query("{}=={}".format(series_name, series))
+                axes[j].scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+
             axes[j].set_xlabel(x_name)
             axes[j].set_ylabel(y_name)
             axes[j].set_ylim(ylim)
@@ -2454,14 +2470,18 @@ def display_high_dimensional_regression_results_one_row(x_name, y_name, column_n
 
 
 def display_high_dimensional_regression_results_one_row_one_column(x_name, y_name, series_name, df_results_all, ylim):
-    #column_items = np.unique(df_results_all[column_name])
+    # column_items = np.unique(df_results_all[column_name])
     series_items = np.unique(df_results_all[series_name])
-    plt.figure(figsize = (8,6))
-
+    plt.figure(figsize=(8, 6))
 
     for series in series_items:
-        df_ = df_results_all.query("{}=={}".format(series_name, series))
-        plt.scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
+
+        if type(series) == str:
+            df_ = df_results_all.query("{}=='{}'".format(series_name, series))
+            plt.scatter(df_[x_name], df_[y_name], label="'{}' = '{}'".format(series_name, series))
+        else:
+            df_ = df_results_all.query("{}=={}".format(series_name, series))
+            plt.scatter(df_[x_name], df_[y_name], label="{} = {:.1E}".format(series_name, series))
         plt.xlabel(x_name)
         plt.ylabel(y_name)
         plt.ylim(ylim)
