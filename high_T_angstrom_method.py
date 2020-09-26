@@ -2569,6 +2569,44 @@ def batch_process_steady_state_emission_spread_sheet(data_directory, code_direct
 
     return df_DC_results
 
+
+def compute_Amax_fv(df_DC_results, df_sigma_results):
+    estimated_sigma_SC = []
+    Amax_fv_list = []
+
+    for i in range(len(df_DC_results)):
+        df_exp_condition_ = df_DC_results.iloc[i, :]
+        focal_shift = df_exp_condition_['focal_shift']
+        sigma_SC = float(df_sigma_results.query("focal_shift =={}".format(focal_shift))['sigma_s'])
+        # print(sigma_SC)
+        estimated_sigma_SC.append(sigma_SC)
+
+        absorptivity_front = df_exp_condition_['absorptivity_front']
+
+        E_total = df_exp_condition_['E_total']
+
+        R_sample = 0.0889 / 2
+
+        Amax_fv = E_total / (absorptivity_front * sigma_SC * np.log((sigma_SC ** 2 + R_sample ** 2) / sigma_SC ** 2))
+
+        Amax_fv_list.append(Amax_fv)
+
+    df_updated_DC_results = df_DC_results.copy()
+    df_updated_DC_results['sigma_SC'] = estimated_sigma_SC
+    df_updated_DC_results['Amax_fv'] = Amax_fv_list
+
+    return df_updated_DC_results
+
+
+
+
+
+
+
+
+
+
+
 def sensitivity_model_output(f_heating, X_input_array,df_temperature, df_r_ref_locations, sample_information, vacuum_chamber_setting, numerical_simulation_setting,
                              solar_simulator_settings, light_source_property,code_directory):
     # X_input array is 2D array produced by python salib
