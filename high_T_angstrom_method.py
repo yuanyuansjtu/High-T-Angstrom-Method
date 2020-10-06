@@ -2494,7 +2494,22 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
 
     plt.show()
 
+    return fig
 
+
+def parallel_result_visualization(df_exp_condition_spreadsheet_filename, df_results_all, num_cores, data_directory,
+                                  code_directory):
+    df_exp_conditions = pd.read_excel(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    regression_fig_joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
+        delayed(result_visulization_one_case)(df_exp_conditions.iloc[i, :], code_directory, data_directory,
+                                              df_results_all.iloc[i, :]) for i in
+        tqdm(range(len(df_exp_conditions))))
+
+    pickle.dump(regression_fig_joblib_output,
+                open(code_directory + "result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename,
+                     "wb"))
 
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_directory, df_amplitude_phase_measurement,df_temperature):
@@ -3248,8 +3263,7 @@ def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, d
     plt.show()
 
 
-def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_temperature, df_r_ref_locations,
-                                 sample_information, vacuum_chamber_setting, solar_simulator_settings,
+def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_information, vacuum_chamber_setting, solar_simulator_settings,
                                  light_source_property, numerical_simulation_setting,code_directory):
     for i, (parameter_name, DOE_parameter_value) in enumerate(zip(parameter_name_list, DOE_parameters)):
         # print(parameter_name)
@@ -3263,6 +3277,13 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_tempera
             numerical_simulation_setting[parameter_name] = DOE_parameter_value
         elif parameter_name in solar_simulator_settings.keys():
             solar_simulator_settings[parameter_name] = DOE_parameter_value
+            if parameter_name == 'f_heating':
+                if DOE_parameter_value >=0.08:
+                    numerical_simulation_setting['N_cycle'] = 25
+                elif DOE_parameter_value <0.08 and DOE_parameter_value>=0.04:
+                    numerical_simulation_setting['N_cycle'] = 15
+                elif DOE_parameter_value <0.04:
+                    numerical_simulation_setting['N_cycle'] = 6
         elif parameter_name in light_source_property.keys():
             light_source_property[parameter_name] = DOE_parameter_value
 
@@ -3274,30 +3295,29 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters, df_tempera
 
     return df_amp_phase_simulated
 
-
-
-def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,code_directory, df_temperature,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting):
+def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations,num_cores, result_name,code_directory,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting):
 
 
     DOE_parameters_complete = [one_factorial_design for one_factorial_design in full_factorial_combinations]
 
-    jupyter_directory = os.getcwd()
-    result_dump_path = jupyter_directory+"//sensitivity cache dump//" + result_name
+    #jupyter_directory = os.getcwd()
+    result_dump_path = code_directory+"Sensitivity result jupyter notebook//sensitivity cache dump//" + result_name
     if (os.path.isfile(result_dump_path)):
         print("Previous dump file existed, check if duplicate! The previous results are loaded.")
         joblib_output = pickle.load(open(result_dump_path, 'rb'))
     else:
-        joblib_output = Parallel(n_jobs=num_cores)(delayed(DOE_numerical_model_one_case)(parameter_name_list, DOE_parameters,df_temperature,df_r_ref_locations, sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting,code_directory) for
+        print("No dump file found")
+        joblib_output = Parallel(n_jobs=num_cores)(delayed(DOE_numerical_model_one_case)(parameter_name_list, DOE_parameters,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting,code_directory) for
                                                   DOE_parameters in tqdm(DOE_parameters_complete))
-
+        print("run complete, now dump files")
         pickle.dump(joblib_output, open(result_dump_path, "wb"))
 
     df_run_conditions = pd.DataFrame(columns=parameter_name_list,data =DOE_parameters_complete)
     amp_ratio_results = np.array([np.array(joblib_output_['amp_ratio']) for joblib_output_ in joblib_output])
     phase_diff_results = np.array([np.array(joblib_output_['phase_diff']) for joblib_output_ in joblib_output])
 
-    df_results_amp_only = pd.DataFrame(columns=df_r_ref_locations['r'], data = amp_ratio_results)
-    df_results_phase_only = pd.DataFrame(columns=df_r_ref_locations['r'], data = phase_diff_results)
+    df_results_amp_only = pd.DataFrame(columns=joblib_output[0]['r'], data = amp_ratio_results)
+    df_results_phase_only = pd.DataFrame(columns=joblib_output[0]['r'], data = phase_diff_results)
 
     df_results_amp_ratio_complete = pd.concat([df_run_conditions,df_results_amp_only],axis = 1)
     df_results_phase_difference_complete = pd.concat([df_run_conditions,df_results_phase_only],axis = 1)
@@ -3305,7 +3325,8 @@ def parallel_2nd_level_DOE(parameter_name_list, full_factorial_combinations, df_
     return df_results_amp_ratio_complete, df_results_phase_difference_complete
 
 
-def main_effects_2_level_DOE(df_original, f_heating, parameter_name_list, df_r_ref_locations):
+
+def main_effects_2_level_DOE(df_original, f_heating, parameter_name_list):
     df_DOE = df_original.query('f_heating == {}'.format(f_heating))
     param_main_list = []
     N_index = len(parameter_name_list)
@@ -3323,22 +3344,38 @@ def main_effects_2_level_DOE(df_original, f_heating, parameter_name_list, df_r_r
     parameter_name_columns.remove('f_heating')  # remember python pass by reference, it modifies the original list!
 
     df_main_effect = pd.DataFrame(columns=parameter_name_columns, data=np.array(param_main_list).T)
-    df_main_effect['r'] = df_r_ref_locations['r']
-    return df_main_effect
+    df_main_effect['r'] = df_DOE.columns[len(parameter_name_list):]
+
+    df_main_effect_sum = df_main_effect.copy()
+    df_main_effect_percentage = df_main_effect.copy()
+    df_main_effect_sum = df_main_effect_sum.drop('r', 1)
+    normalizing_factor = abs(df_main_effect_sum).sum(axis=1)
+
+    for col in parameter_name_columns:
+        if col != 'r':
+            df_main_effect_percentage[col] = abs(df_main_effect_percentage[col]) / normalizing_factor
+
+    # result_summation_abs = abs(df_main_effect).sum(axis=0)
+    # min_sensitivity_column = result_summation_abs.idxmin()
+    # df_relative_sensitivity = df_main_effect.copy()
+    # df_original_copy_min_column = df_relative_sensitivity[min_sensitivity_column].copy()
+    # parameter_name_list_copy = parameter_name_list.copy()
+    # parameter_name_list_copy.remove('f_heating')
+    # for param in parameter_name_columns:
+    #     df_relative_sensitivity[param] = df_relative_sensitivity[param] / df_original_copy_min_column
+
+    return df_main_effect, df_main_effect_percentage
 
 
-def plot_main_effects_2nd_level_DOE(df_amp_ratio_DOE_origninal, df_phase_diff_DOE_orignal, f_heating,
-                                    df_r_ref_locations, parameter_name_list):
-    df_main_effect_amp_ratio = main_effects_2_level_DOE(df_amp_ratio_DOE_origninal, f_heating, parameter_name_list,
-                                                        df_r_ref_locations)
-    df_main_effect_phase_diff = main_effects_2_level_DOE(df_phase_diff_DOE_orignal, f_heating, parameter_name_list,
-                                                         df_r_ref_locations)
+def plot_main_effects_2nd_level_DOE(df_amp_ratio_DOE_origninal, df_phase_diff_DOE_orignal, f_heating, parameter_name_list):
+    df_main_effect_amp_ratio, df_relative_sensitivity_amp_ratio = main_effects_2_level_DOE(df_amp_ratio_DOE_origninal, f_heating, parameter_name_list)
+    df_main_effect_phase_diff, df_relative_sensitivity_phase_diff = main_effects_2_level_DOE(df_phase_diff_DOE_orignal, f_heating, parameter_name_list)
     parameter_name_columns = parameter_name_list.copy()
     parameter_name_columns.remove('f_heating')
 
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(12, 12))
 
-    plt.subplot(121)
+    plt.subplot(221)
     for parameter_name in parameter_name_columns:
         plt.scatter(df_main_effect_amp_ratio['r'], df_main_effect_amp_ratio[parameter_name], label=parameter_name)
 
@@ -3353,12 +3390,45 @@ def plot_main_effects_2nd_level_DOE(df_amp_ratio_DOE_origninal, df_phase_diff_DO
         tick.label.set_fontweight('bold')
     plt.legend(prop={'weight': 'bold', 'size': 12})
 
-    plt.subplot(122)
+    plt.subplot(222)
     for parameter_name in parameter_name_columns:
         plt.scatter(df_main_effect_phase_diff['r'], df_main_effect_phase_diff[parameter_name], label=parameter_name)
 
     plt.xlabel('R(pixel)', fontsize=12, fontweight='bold')
     plt.ylabel('Phase difference main effect', fontsize=12, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+
+    plt.subplot(223)
+    for parameter_name in parameter_name_columns:
+        plt.scatter(df_relative_sensitivity_amp_ratio['r'], df_relative_sensitivity_amp_ratio[parameter_name], label=parameter_name)
+
+    plt.xlabel('R(pixel)', fontsize=12, fontweight='bold')
+    plt.ylabel('Amplitude ratio main effect relative', fontsize=12, fontweight='bold')
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=12)
+        tick.label.set_fontweight('bold')
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+
+
+
+    plt.subplot(224)
+    for parameter_name in parameter_name_columns:
+        plt.scatter(df_relative_sensitivity_phase_diff['r'], df_relative_sensitivity_phase_diff[parameter_name], label=parameter_name)
+
+    plt.xlabel('R(pixel)', fontsize=12, fontweight='bold')
+    plt.ylabel('Phase difference main effect relative', fontsize=12, fontweight='bold')
     ax = plt.gca()
     for tick in ax.xaxis.get_major_ticks():
         tick.label.set_fontsize(fontsize=12)
@@ -3438,35 +3508,50 @@ def interaction_effects_2_level_DOE(df_original, f_heating, parameter_name_list,
     return df_interaction, f
 
 
-def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_heating_list, parameter_name_list,
-                                      df_r_ref_locations):
-    f, axes = plt.subplots(1, len(f_heating_list),
-                           figsize=(int(len(f_heating_list) * 4), 5), sharex=True, sharey=True)
+def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_heating_list, parameter_name_list):
+    f, axes = plt.subplots(2, len(f_heating_list),
+                           figsize=(int(len(f_heating_list) * 5), 10), sharex=True, sharey='row')
 
     parameter_name_columns = parameter_name_list.copy()
     parameter_name_columns.remove('f_heating')
 
     for i, f_heating in enumerate(f_heating_list):
-        df_main_effect = main_effects_2_level_DOE(df_results_main_effect, f_heating, parameter_name_list,
-                                                  df_r_ref_locations)
+        df_main_effect, df_main_effect_relative = main_effects_2_level_DOE(df_results_main_effect, f_heating,
+                                                                           parameter_name_list)
 
         for parameter_name in parameter_name_columns:
-            axes[i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=parameter_name)
+            axes[0, i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=parameter_name)
+            axes[1, i].scatter(df_main_effect_relative['r'], df_main_effect_relative[parameter_name],
+                               label=parameter_name)
 
-        axes[i].set_xlabel('R(pixel)', fontsize=12, fontweight='bold')
-        axes[i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+        axes[0, i].set_xlabel('R(pixel)', fontsize=12, fontweight='bold')
+        axes[0, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+
+        axes[1, i].set_xlabel('R(pixel)', fontsize=12, fontweight='bold')
+        axes[1, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+
         if i == 0:
-            axes[i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
-        axes[i].legend(prop={'weight': 'bold', 'size': 12})
+            axes[0, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
+            axes[1, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
 
-        for tick in axes[i].xaxis.get_major_ticks():
+        axes[0, i].legend(prop={'weight': 'bold', 'size': 12})
+        axes[1, i].legend(prop={'weight': 'bold', 'size': 12})
+
+        for tick in axes[0, i].xaxis.get_major_ticks():
             tick.label.set_fontsize(fontsize=12)
             tick.label.set_fontweight('bold')
-        for tick in axes[i].yaxis.get_major_ticks():
+        for tick in axes[0, i].yaxis.get_major_ticks():
+            tick.label.set_fontsize(fontsize=12)
+            tick.label.set_fontweight('bold')
+        for tick in axes[1, i].xaxis.get_major_ticks():
+            tick.label.set_fontsize(fontsize=12)
+            tick.label.set_fontweight('bold')
+        for tick in axes[1, i].yaxis.get_major_ticks():
             tick.label.set_fontsize(fontsize=12)
             tick.label.set_fontweight('bold')
 
     plt.tight_layout(h_pad=1)
+
 
 
 def amp_phase_DOE_sensitivity(parameter_name_list, full_factorial_combinations, df_r_ref_locations,num_cores, result_name,df_temperature,sample_information,vacuum_chamber_setting,solar_simulator_settings,light_source_property,numerical_simulation_setting):
