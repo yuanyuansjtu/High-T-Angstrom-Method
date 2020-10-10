@@ -3330,8 +3330,10 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_info
                     numerical_simulation_setting['N_cycle'] = 25
                 elif DOE_parameter_value <0.08 and DOE_parameter_value>=0.04:
                     numerical_simulation_setting['N_cycle'] = 15
-                elif DOE_parameter_value <0.04:
+                elif DOE_parameter_value <0.04 and DOE_parameter_value>0.005:
                     numerical_simulation_setting['N_cycle'] = 6
+                elif DOE_parameter_value < 0.005:
+                    numerical_simulation_setting['N_cycle'] = 4
         elif parameter_name in light_source_property.keys():
             light_source_property[parameter_name] = DOE_parameter_value
 
