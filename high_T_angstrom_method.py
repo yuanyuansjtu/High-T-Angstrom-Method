@@ -243,6 +243,8 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
     sigma_ray_tracing_list = []
 
+    emissivity_front_list = []
+
     for i, regression_type in enumerate(df_exp_condition['regression_result_type']):
 
         if regression_type == 'sigma_s':
@@ -251,6 +253,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
             alpha_regression_list.append(f_alpha(T_average_list[i])) # this is wrong, need fixed!
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
             alpha_theoretical_list.append(f_alpha(T_average_list[i]))
+            emissivity_front_list.append(df_exp_condition['emissivity_front'][i])
 
         elif regression_type == 'alpha_r':
             focal_shift = df_exp_condition['focal_shift'][i]
@@ -259,10 +262,20 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
             sigma_ray_tracing_list.append(f_sigma(focal_shift))
 
             alpha_theoretical_list.append(f_alpha(T_average_list[i]))
+            emissivity_front_list.append(df_exp_condition['emissivity_front'][i])
+
+        elif regression_type == 'emissivity_front':
+            focal_shift = df_exp_condition['focal_shift'][i]
+            sigma_s_list.append(f_sigma(focal_shift))
+            alpha_regression_list.append(f_alpha(T_average_list[i]))
+            sigma_ray_tracing_list.append(f_sigma(focal_shift))
+
+            alpha_theoretical_list.append(f_alpha(T_average_list[i]))
+            emissivity_front_list.append(joblib_output[i][0])
 
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_result_type']
-                                   ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list,'regression_method':df_exp_condition['regression_method']})
+                                   ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list,'regression_method':df_exp_condition['regression_method'],'emissivity_front':emissivity_front_list})
 
 
     return df_results_all
@@ -726,7 +739,7 @@ def calculator_back_W2_ring_VF(rm_array, dr, W1, W2,R_chamber):
     return np.array(F_list)
 
 
-def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,solar_simulator_settings,vacuum_chamber_setting):
+def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,solar_simulator_settings,vacuum_chamber_setting,numerical_simulation_setting):
 
     # sample_information, vacuum_chamber_setting, solar_simulator_settings,
     #                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ
@@ -743,16 +756,26 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
 
     df_LB_details_all = pd.read_csv(code_directory + "sample specifications//LB temperature details sept 2020.csv")
 
-    if sample_name == 'copper':
-        df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
+
+    if numerical_simulation_setting['regression_result_type'] != 'sensitivity_analysis':
+
+        if sample_name == 'copper':
+            df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
+
+        else:
+            df_LB_temp = df_LB_details_all.query("Material == '{}'".format('graphite_poco'))
+
+        T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
+
+        T_LB1 = T_LB1_C + 273.15
+        T_LB2 = T_LB2_C + 273.15
+        T_LB3 = T_LB3_C + 273.15
+
     else:
-        df_LB_temp = df_LB_details_all.query("Material == '{}'".format('graphite_poco'))
-
-    T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
-
-    T_LB1 = T_LB1_C + 273.15
-    T_LB2 = T_LB2_C + 273.15
-    T_LB3 = T_LB3_C + 273.15
+        T_LB1 = vacuum_chamber_setting['T_sur1']
+        T_LB2 = vacuum_chamber_setting['T_sur1']
+        T_LB3 = vacuum_chamber_setting['T_sur1']
+        T_LB_mean_C = vacuum_chamber_setting['T_sur1']
 
     absorptivity_front = sample_information['absorptivity_front']
     absorptivity_back = sample_information['absorptivity_back']
@@ -839,6 +862,8 @@ def mean_LB_temperatures(df_LB_temperature_details, focal_shift, VDC, R_inner_pi
         T_mean_C = np.sum(Area_list * np.array(T_LB1['T_C'])) / np.sum(Area_list)
 
     return T_mean_C
+
+
 
 def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_details_csv):
 
@@ -1678,15 +1703,15 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 # T_temp = T[p, :]
                 print("Error! No stable temperature profile was obtained!")
 
-        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
+        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}, e_front = {:.2f}.'.format(
             alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
+            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1'], sample_information['emissivity_front']))
 
 
     elif (vectorize and view_factor_setting == True):
 
 
-        Cm,T_LB_mean_C = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, solar_simulator_settings,vacuum_chamber_setting)
+        Cm,T_LB_mean_C = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, solar_simulator_settings,vacuum_chamber_setting, numerical_simulation_setting)
 
 
         q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
@@ -1737,9 +1762,9 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 # T_temp = T[p, :]
                 print("Error! No stable temperature profile was obtained!")
 
-        print('alpha_r = {:.2E}, focal plane = {} cm, sigma_s = {:.2E}, f_heating = {} Hz, Rec = {}, T_LB_mean = {:.1f} K.'.format(
+        print('alpha_r = {:.2E}, focal plane = {} cm, sigma_s = {:.2E}, f_heating = {} Hz, Rec = {}, T_LB_mean = {:.1f} K, e_front = {:.2f}.'.format(
             alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], T_LB_mean_C + 273.15))
+            solar_simulator_settings['rec_name'], T_LB_mean_C + 273.15, sample_information['emissivity_front']))
 
 
     else: # do not use non-vectorized code whenever possible, runs too slow
@@ -1794,9 +1819,9 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                                           absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
                                       p, m] ** 4)
 
-        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(
+        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}., e_front = {:.2f}'.format(
             alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']))
+            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']), sample_information['emissivity_front'])
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
@@ -1856,6 +1881,13 @@ def residual_update(params, df_amplitude_phase_measurement, sample_information, 
             #print("params['alpha_r']: "+str(params['alpha_r']))
         elif regression_module == 'scipy.optimize-NM':
             sample_information['alpha_r'] = params[0]
+
+    elif numerical_simulation_setting['regression_result_type'] == 'emissivity_front':
+        if regression_module == 'lmfit':
+            sample_information['emissivity_front'] = params['emissivity_front'].value
+            #print("params['alpha_r']: "+str(params['alpha_r']))
+        elif regression_module == 'scipy.optimize-NM':
+            sample_information['emissivity_front'] = params[0]
 
     df_amp_phase_simulated,df_temperature_simulation = simulation_result_amplitude_phase_extraction(sample_information, vacuum_chamber_setting,
                                                                           solar_simulator_settings,
@@ -2381,6 +2413,14 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
                                                                      solar_simulator_settings['V_DC'],
                                                                      vacuum_chamber_setting['focal_shift'])
 
+
+    elif param_name == 'emissivity_front':
+        sample_information['emissivity_front'] = df_result_i['emissivity_front']
+        sample_information['absorptivity_front'] = df_result_i['emissivity_front']
+        title_text = 'emissivity_front = {:.2E}, DC = {} V, d = {} cm'.format(df_result_i['emissivity_front'],
+                                                                     solar_simulator_settings['V_DC'],
+                                                                     vacuum_chamber_setting['focal_shift'])
+
     df_amp_phase_simulated, df_temperature_simulation = simulation_result_amplitude_phase_extraction(sample_information,
                                                                                                      vacuum_chamber_setting,
                                                                                                      solar_simulator_settings,
@@ -2508,7 +2548,7 @@ def parallel_result_visualization(df_exp_condition_spreadsheet_filename, df_resu
         tqdm(range(len(df_exp_conditions))))
 
     pickle.dump(regression_fig_joblib_output,
-                open(code_directory + "result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename,
+                open(code_directory + "regression figure dump//regression_figs_" + df_exp_condition_spreadsheet_filename,
                      "wb"))
 
 
@@ -2620,7 +2660,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
         params = Parameters()
 
         if df_exp_condition['regression_result_type'] == 'alpha_r':
-            params.add('alpha_r', value=float(df_exp_condition['p_initial']), min=0.0)
+            params.add('alpha_r', value=float(df_exp_condition['p_initial']), min=1e-8)
 
             out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
             solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory),
@@ -2629,13 +2669,23 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
             regression_result = out.params['alpha_r'].value
 
         elif df_exp_condition['regression_result_type'] == 'sigma_s':
-            params.add('sigma_s', value=float(df_exp_condition['p_initial']), min=0.0)
+            params.add('sigma_s', value=float(df_exp_condition['p_initial']), min=1e-4, max= 5e-1)
 
             out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
             solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory),
                                  xtol=df_exp_condition['regression_residual_converging_criteria'])
 
             regression_result = out.params['sigma_s'].value
+
+        elif df_exp_condition['regression_result_type'] == 'emissivity_front':
+            params.add('emissivity_front', value=float(df_exp_condition['p_initial']), min=0.05, max = 1)
+
+            out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+            solar_simulator_settings, light_source_property, numerical_simulation_setting,code_directory),
+                                 xtol=df_exp_condition['regression_residual_converging_criteria'])
+
+            regression_result = out.params['emissivity_front'].value
+
 
     elif regression_module == 'scipy.optimize-NM':
 
@@ -3268,8 +3318,6 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_info
     for i, (parameter_name, DOE_parameter_value) in enumerate(zip(parameter_name_list, DOE_parameters)):
         # print(parameter_name)
         if parameter_name in sample_information.keys():
-            if parameter_name == 'emissivity_front':
-                sample_information['absorptivity_front'] = DOE_parameter_value
             sample_information[parameter_name] = DOE_parameter_value
         elif parameter_name in vacuum_chamber_setting.keys():
             vacuum_chamber_setting[parameter_name] = DOE_parameter_value
