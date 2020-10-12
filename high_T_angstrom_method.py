@@ -1333,6 +1333,7 @@ def interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, foc
     return Amax, sigma_s, kvd, bvd
 
 
+
 def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_settings, vacuum_chamber_setting,light_source_property,
                                              df_solar_simulator_VQ, sigma_df):
 
@@ -3566,12 +3567,17 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
     f, axes = plt.subplots(2, len(f_heating_list),
                            figsize=(int(len(f_heating_list) * 5), 10), sharex=True, sharey='row')
 
+    df_main_effect_list = []
+    df_main_effect_relative_list = []
+
     parameter_name_columns = parameter_name_list.copy()
     parameter_name_columns.remove('f_heating')
 
     for i, f_heating in enumerate(f_heating_list):
         df_main_effect, df_main_effect_relative = main_effects_2_level_DOE(df_results_main_effect, f_heating,
                                                                            parameter_name_list)
+        df_main_effect_list.append(df_main_effect)
+        df_main_effect_relative_list.append(df_main_effect_relative)
 
         for parameter_name in parameter_name_columns:
             axes[0, i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=parameter_name)
@@ -3605,6 +3611,8 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
             tick.label.set_fontweight('bold')
 
     plt.tight_layout(h_pad=1)
+
+    return df_main_effect_list, df_main_effect_relative_list
 
 
 
