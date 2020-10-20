@@ -27,7 +27,7 @@ from scipy.interpolate import interp1d,interp2d
 
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
-print("Yuan said hello")
+#print("Yuan said hello")
 
 def plot_temperature_contour(x0, y0, path, file_name_0, file_name_1, R0, R_analysis):
     fig = plt.figure(figsize=(13, 6))
