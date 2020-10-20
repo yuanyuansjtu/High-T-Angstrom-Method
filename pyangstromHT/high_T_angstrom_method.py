@@ -12,9 +12,9 @@ import operator
 import lmfit
 from lmfit import Parameters
 
-from SALib.sample import saltelli
+#from SALib.sample import saltelli
 #from SALib.analyze import sobol
-from SALib.test_functions import Ishigami
+#from SALib.test_functions import Ishigami
 
 from scipy.stats import norm
 from scipy.stats import multivariate_normal
