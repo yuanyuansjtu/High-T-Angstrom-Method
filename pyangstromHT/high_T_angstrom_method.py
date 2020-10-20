@@ -13,7 +13,7 @@ import lmfit
 from lmfit import Parameters
 
 from SALib.sample import saltelli
-from SALib.analyze import sobol
+#from SALib.analyze import sobol
 from SALib.test_functions import Ishigami
 
 from scipy.stats import norm
@@ -3263,56 +3263,58 @@ def sensitivity_model_parallel(X_dump_file_name, f_heating_list, num_cores, df_t
     print(e_time - s_time)
 
 
-def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, df_r_ref_locations,calc_second_order):
-    amp_ratio_results = np.array([np.array(parallel_result['amp_ratio']) for parallel_result in parallel_results])
-    phase_diff_results = np.array([np.array(parallel_result['phase_diff']) for parallel_result in parallel_results])
+# def show_sensitivity_results_sobol(sobol_problem, parallel_results, f_heating, df_r_ref_locations,calc_second_order):
+#     amp_ratio_results = np.array([np.array(parallel_result['amp_ratio']) for parallel_result in parallel_results])
+#     phase_diff_results = np.array([np.array(parallel_result['phase_diff']) for parallel_result in parallel_results])
+#
+#     Si_amp_radius = np.array(
+#         [sobol.analyze(sobol_problem, amp_ratio_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
+#          for i in range(amp_ratio_results.shape[1])])
+#     # Just pay close attention that calc_second_order=False must be consistent with how X is defined!
+#
+#     Si_phase_radius = np.array(
+#         [sobol.analyze(sobol_problem, phase_diff_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
+#          for i in range(phase_diff_results.shape[1])])
+#
+#     plt.figure(figsize=(14, 6))
+#     radius = df_r_ref_locations['r']
+#     plt.subplot(121)
+#     for i, name in enumerate(sobol_problem['names']):
+#         # plt.plot(Si_amp_radius[:, i], label=name)
+#
+#         plt.scatter(radius, Si_amp_radius[:, i], label=name)
+#
+#     plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
+#     plt.ylabel('Amp Ratio Sensitivity', fontsize=14, fontweight='bold')
+#
+#     plt.suptitle('frequency = ' + str(f_heating) + ' Hz', fontsize=14, fontweight='bold')
+#     ax = plt.gca()
+#     for tick in ax.xaxis.get_major_ticks():
+#         tick.label.set_fontsize(fontsize=12)
+#         tick.label.set_fontweight('bold')
+#     for tick in ax.yaxis.get_major_ticks():
+#         tick.label.set_fontsize(fontsize=12)
+#         tick.label.set_fontweight('bold')
+#     plt.legend(prop={'weight': 'bold', 'size': 12})
+#
+#     plt.subplot(122)
+#     for i, name in enumerate(sobol_problem['names']):
+#         # plt.plot(Si_phase_radius[:, i], label=name)
+#         plt.scatter(radius, Si_phase_radius[:, i], label=name)
+#     plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
+#     plt.ylabel('Phase diff Sensitivity', fontsize=14, fontweight='bold')
+#
+#     ax = plt.gca()
+#     for tick in ax.xaxis.get_major_ticks():
+#         tick.label.set_fontsize(fontsize=12)
+#         tick.label.set_fontweight('bold')
+#     for tick in ax.yaxis.get_major_ticks():
+#         tick.label.set_fontsize(fontsize=12)
+#         tick.label.set_fontweight('bold')
+#     plt.legend(prop={'weight': 'bold', 'size': 12})
+#     plt.show()
+#
 
-    Si_amp_radius = np.array(
-        [sobol.analyze(sobol_problem, amp_ratio_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
-         for i in range(amp_ratio_results.shape[1])])
-    # Just pay close attention that calc_second_order=False must be consistent with how X is defined!
-
-    Si_phase_radius = np.array(
-        [sobol.analyze(sobol_problem, phase_diff_results[:, i], calc_second_order=calc_second_order, print_to_console=False)['S1']
-         for i in range(phase_diff_results.shape[1])])
-
-    plt.figure(figsize=(14, 6))
-    radius = df_r_ref_locations['r']
-    plt.subplot(121)
-    for i, name in enumerate(sobol_problem['names']):
-        # plt.plot(Si_amp_radius[:, i], label=name)
-
-        plt.scatter(radius, Si_amp_radius[:, i], label=name)
-
-    plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
-    plt.ylabel('Amp Ratio Sensitivity', fontsize=14, fontweight='bold')
-
-    plt.suptitle('frequency = ' + str(f_heating) + ' Hz', fontsize=14, fontweight='bold')
-    ax = plt.gca()
-    for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
-        tick.label.set_fontweight('bold')
-    for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
-        tick.label.set_fontweight('bold')
-    plt.legend(prop={'weight': 'bold', 'size': 12})
-
-    plt.subplot(122)
-    for i, name in enumerate(sobol_problem['names']):
-        # plt.plot(Si_phase_radius[:, i], label=name)
-        plt.scatter(radius, Si_phase_radius[:, i], label=name)
-    plt.xlabel('R (pixel)', fontsize=14, fontweight='bold')
-    plt.ylabel('Phase diff Sensitivity', fontsize=14, fontweight='bold')
-
-    ax = plt.gca()
-    for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
-        tick.label.set_fontweight('bold')
-    for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(fontsize=12)
-        tick.label.set_fontweight('bold')
-    plt.legend(prop={'weight': 'bold', 'size': 12})
-    plt.show()
 
 
 def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_information, vacuum_chamber_setting, solar_simulator_settings,
