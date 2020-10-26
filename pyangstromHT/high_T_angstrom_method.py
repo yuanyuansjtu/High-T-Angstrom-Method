@@ -1612,7 +1612,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
     f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
     N_cycle = numerical_simulation_setting['N_cycle']
-
+    N_stable_cycle_output = numerical_simulation_setting['N_stable_cycle_output']
 
     simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
 
@@ -1621,6 +1621,8 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
 
     absorptivity_front = sample_information['absorptivity_front']  # assumed to be constant
     absorptivity_back = sample_information['absorptivity_back']  # assumed to be constant
+
+
 
     sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
 
@@ -1694,7 +1696,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
                 if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
                     N_steady_count += 1
-                    if N_steady_count == 2:  # only need 2 periods to calculate amplitude and phase
+                    if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
                         time_index = p
                         print("stable temperature profile has been obtained @ iteration N= {}!".format(
                             int(p / N_one_cycle)))
@@ -1753,7 +1755,7 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
                 A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
                 if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
                     N_steady_count += 1
-                    if N_steady_count == 2:  # only need 2 periods to calculate amplitude and phase
+                    if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
                         time_index = p
                         print("stable temperature profile has been obtained @ iteration N= {}!".format(
                             int(p / N_one_cycle)))
@@ -1836,7 +1838,7 @@ def simulation_result_amplitude_phase_extraction(sample_information,
     R0 = vacuum_chamber_setting['R0']
     R_analysis = vacuum_chamber_setting['R_analysis']
     simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
-
+    N_stable_cycle_output = numerical_simulation_setting['N_stable_cycle_output']
 
     #df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//9_14_Amax_Fv_d_correlations.csv")
     #sigma_df = pd.read_csv(code_directory + "sample specifications//Lorentzian sigma.csv")
@@ -1851,8 +1853,8 @@ def simulation_result_amplitude_phase_extraction(sample_information,
     # I want max 400 samples per period
     N_skip_time = max(int(N_one_cycle / 400),1) # avoid N_skip to be zero
 
-    df_temperature_simulation = pd.DataFrame(data=T_[-2*N_one_cycle::N_skip_time,:])  # return a dataframe containing radial averaged temperature and relative time
-    df_temperature_simulation['reltime'] = time_T_[-2*N_one_cycle::N_skip_time]
+    df_temperature_simulation = pd.DataFrame(data=T_[-N_stable_cycle_output*N_one_cycle::N_skip_time,:])  # return a dataframe containing radial averaged temperature and relative time
+    df_temperature_simulation['reltime'] = time_T_[-N_stable_cycle_output*N_one_cycle::N_skip_time]
 
 
     df_amp_phase_simulated = batch_process_horizontal_lines(df_temperature_simulation, f_heating, R0, gap, R_analysis, simulated_amp_phase_extraction_method) # The default frequency analysis for simulated temperature profile is sine
