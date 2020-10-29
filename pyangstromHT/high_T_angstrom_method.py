@@ -124,8 +124,8 @@ def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adj
     axes.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     axes.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
-    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
-    circle2 = plt.Circle((x0, y0), R0 + R_zoom, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='b', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_zoom, edgecolor='b', fill=False, linewidth=3, linestyle='-.')
 
     axes.invert_yaxis()
     axes.clabel(CS, inline=1, fontsize=12, manual=manual_locations)
@@ -245,7 +245,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
 
     emissivity_front_list = []
 
-    for i, regression_type in enumerate(df_exp_condition['regression_result_type']):
+    for i, regression_type in enumerate(df_exp_condition['regression_parameter']):
 
         if regression_type == 'sigma_s':
             sigma_s_list.append(joblib_output[i][0])
@@ -274,7 +274,7 @@ def regression_joblib_to_dataframe(joblib_output, code_directory, df_exp_conditi
             emissivity_front_list.append(joblib_output[i][0])
 
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'focal_distance(cm)':df_exp_condition['focal_shift'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
-                                   'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_result_type']
+                                   'sigma_s':sigma_s_list,'T_average(K)':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_regression_list,'regression_parameter':df_exp_condition['regression_parameter']
                                    ,'alpha_theoretical':alpha_theoretical_list,'sigma_ray_tracing':sigma_ray_tracing_list,'regression_method':df_exp_condition['regression_method'],'emissivity_front':emissivity_front_list})
 
 
@@ -742,89 +742,136 @@ def calculator_back_W2_ring_VF(rm_array, dr, W1, W2,R_chamber):
 
 def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sample_information,solar_simulator_settings,vacuum_chamber_setting,numerical_simulation_setting,df_view_factor,df_LB_details_all):
 
-    # sample_information, vacuum_chamber_setting, solar_simulator_settings,
-    #                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ
+    # The radioan absorption view factor contains the following cases:
+    # (1) With light blocker: (a) Sensitivity analysis: Light blocker has the same temperature. (b) Regression analysis: Light blocker has radial varied temperature
+    # (2) Without light blocker: (a) Sensitivity analysis: Surroundings are treated as the same temperature (not including glass and IR radiation shield). (b) Regression: Surrounding temperature are treated differently.
+    # These cases are handled internally within the function
+
 
     sigma_sb = 5.67e-8 # stefan boltzmann constant
 
     VDC = solar_simulator_settings['V_DC']
     focal_shift = vacuum_chamber_setting['focal_shift']
 
-    #df_view_factor = pd.read_csv(code_directory + "sample specifications//view factors and T.csv")
-
     sample_name = sample_information['sample_name']
-
-
-    #df_LB_details_all = pd.read_csv(code_directory + "sample specifications//LB temperature details sept 2020.csv")
-
-
-    if numerical_simulation_setting['regression_result_type'] != 'sensitivity_analysis':
-
-        if sample_name == 'copper':
-            df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
-
-        else:
-            df_LB_temp = df_LB_details_all.query("Material == '{}'".format('graphite_poco'))
-
-        T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
-
-        T_LB1 = T_LB1_C + 273.15
-        T_LB2 = T_LB2_C + 273.15
-        T_LB3 = T_LB3_C + 273.15
-
-    else:
-        T_LB1 = vacuum_chamber_setting['T_sur1']
-        T_LB2 = vacuum_chamber_setting['T_sur1']
-        T_LB3 = vacuum_chamber_setting['T_sur1']
-        T_LB_mean_C = vacuum_chamber_setting['T_sur1']
-
     absorptivity_front = sample_information['absorptivity_front']
     absorptivity_back = sample_information['absorptivity_back']
 
-    T_LBH = float(df_view_factor['T_LBH_C'])+273.15
-    T_LBW = float(df_view_factor['T_LBW_C'])+273.15
-    T_IRW = float(df_view_factor['T_IRW_C']) + 273.15
-    T_W1 = float(df_view_factor['T_W1_C'])+273.15
-    T_W2 = float(df_view_factor['T_W2_C'])+273.15
-
-    e_LB = float(df_view_factor['e_LB'])
-    e_LBW = float(df_view_factor['e_LBW'])
-    e_LBH = float(df_view_factor['e_LBH'])
-    e_IRW = float(df_view_factor['e_IRW'])
-    e_W1 = float(df_view_factor['e_W1'])
-    e_W2 = float(df_view_factor['e_W2'])
-
-    L_LB_sample = float(df_view_factor['L_LB_sample'])
-    R_LBH = float(df_view_factor['R_LBH'])
-    R_LB1 = float(df_view_factor['R_LB1'])
-    R_LB2 = float(df_view_factor['R_LB2'])
-    R_LB3 = float(df_view_factor['R_LB3'])
-    R_chamber = float(df_view_factor['R_chamber'])
-    R_IRW = float(df_view_factor['R_IRW'])
-    W1 = float(df_view_factor['W1'])
-    W2 = float(df_view_factor['W2'])
-
-    A_LBH_LB1 = np.pi * (R_LB1 ** 2 - R_LBH ** 2)
-    A_LB1_LB2 = np.pi * (R_LB2 ** 2 - R_LB1 ** 2)
-    A_LB2_LB3 = np.pi * (R_LB3 ** 2 - R_LB2 ** 2)
-    A_LBH = np.pi * R_LBH ** 2
-    A_LBW = 2 * np.pi * R_chamber * L_LB_sample
-
-    A_W1 = 2 * np.pi * R_chamber * W1
-    A_W2 = 2 * np.pi * R_chamber * W2
-    A_IRW = np.pi * R_chamber ** 2
 
 
-    Cm = calculator_coaxial_parallel_rings_view_factors(1e-4, R_LBH, rm_array, dr,L_LB_sample) * A_LBH * e_LBH * sigma_sb * T_LBH ** 4 * absorptivity_front \
-    + calculator_coaxial_parallel_rings_view_factors(R_LBH, R_LB1, rm_array, dr,L_LB_sample) * A_LBH_LB1 * e_LB * sigma_sb * T_LB1 ** 4* absorptivity_front \
-    + calculator_coaxial_parallel_rings_view_factors(R_LB1, R_LB2, rm_array, dr,L_LB_sample) * A_LB1_LB2 * e_LB * sigma_sb * T_LB2 ** 4* absorptivity_front \
-    + calculator_coaxial_parallel_rings_view_factors(R_LB2, R_LB3, rm_array, dr,L_LB_sample) * A_LB2_LB3 * e_LB * sigma_sb * T_LB3 ** 4 * absorptivity_front\
-    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, L_LB_sample, R_chamber) * A_LBW * e_LBW * sigma_sb * T_LBW ** 4 * absorptivity_front \
-    + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber) * A_W1 * e_W1 * sigma_sb * T_W1 ** 4 * absorptivity_back\
-    + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 * absorptivity_back \
-    + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2, R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4 * absorptivity_back
+    if vacuum_chamber_setting['light_blocker'] == True:
 
-    Cm[0] = 0
+        if numerical_simulation_setting['regression_parameter'] != 'sensitivity_analysis':
+
+            if sample_name == 'copper':
+                df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
+
+            else:
+                df_LB_temp = df_LB_details_all.query("Material == '{}'".format('graphite_poco'))
+
+            T_LB1_C,T_LB2_C,T_LB3_C, T_LB_mean_C = interpolate_LB_temperatures(focal_shift, VDC, df_LB_temp)
+
+            T_LB1 = T_LB1_C + 273.15
+            T_LB2 = T_LB2_C + 273.15
+            T_LB3 = T_LB3_C + 273.15
+
+        else:
+            # In sensitivity analysis light blocker temperature is a constant and can be specified
+            T_LB1 = vacuum_chamber_setting['T_sur1']
+            T_LB2 = vacuum_chamber_setting['T_sur1']
+            T_LB3 = vacuum_chamber_setting['T_sur1']
+            T_LB_mean_C = vacuum_chamber_setting['T_sur1']
+
+
+
+        T_LBH = float(df_view_factor['T_LBH_C'])+273.15
+        T_LBW = float(df_view_factor['T_LBW_C'])+273.15
+        T_IRW = float(df_view_factor['T_IRW_C']) + 273.15
+        T_W1 = float(df_view_factor['T_W1_C'])+273.15
+        T_W2 = float(df_view_factor['T_W2_C'])+273.15
+
+        e_LB = float(df_view_factor['e_LB'])
+        e_LBW = float(df_view_factor['e_LBW'])
+        e_LBH = float(df_view_factor['e_LBH'])
+        e_IRW = float(df_view_factor['e_IRW'])
+        e_W1 = float(df_view_factor['e_W1'])
+        e_W2 = float(df_view_factor['e_W2'])
+
+        L_LB_sample = float(df_view_factor['L_LB_sample'])
+        R_LBH = float(df_view_factor['R_LBH'])
+        R_LB1 = float(df_view_factor['R_LB1'])
+        R_LB2 = float(df_view_factor['R_LB2'])
+        R_LB3 = float(df_view_factor['R_LB3'])
+        R_chamber = float(df_view_factor['R_chamber'])
+        R_IRW = float(df_view_factor['R_IRW'])
+        W1 = float(df_view_factor['W1'])
+        W2 = float(df_view_factor['W2'])
+
+        A_LBH_LB1 = np.pi * (R_LB1 ** 2 - R_LBH ** 2)
+        A_LB1_LB2 = np.pi * (R_LB2 ** 2 - R_LB1 ** 2)
+        A_LB2_LB3 = np.pi * (R_LB3 ** 2 - R_LB2 ** 2)
+        A_LBH = np.pi * R_LBH ** 2
+        A_LBW = 2 * np.pi * R_chamber * L_LB_sample
+
+        A_W1 = 2 * np.pi * R_chamber * W1
+        A_W2 = 2 * np.pi * R_chamber * W2
+        A_IRW = np.pi * R_chamber ** 2
+
+
+        Cm = calculator_coaxial_parallel_rings_view_factors(1e-4, R_LBH, rm_array, dr,L_LB_sample) * A_LBH * e_LBH * sigma_sb * T_LBH ** 4 * absorptivity_front \
+        + calculator_coaxial_parallel_rings_view_factors(R_LBH, R_LB1, rm_array, dr,L_LB_sample) * A_LBH_LB1 * e_LB * sigma_sb * T_LB1 ** 4* absorptivity_front \
+        + calculator_coaxial_parallel_rings_view_factors(R_LB1, R_LB2, rm_array, dr,L_LB_sample) * A_LB1_LB2 * e_LB * sigma_sb * T_LB2 ** 4* absorptivity_front \
+        + calculator_coaxial_parallel_rings_view_factors(R_LB2, R_LB3, rm_array, dr,L_LB_sample) * A_LB2_LB3 * e_LB * sigma_sb * T_LB3 ** 4 * absorptivity_front\
+        + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, L_LB_sample, R_chamber) * A_LBW * e_LBW * sigma_sb * T_LBW ** 4 * absorptivity_front \
+        + calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber) * A_W1 * e_W1 * sigma_sb * T_W1 ** 4 * absorptivity_back\
+        + calculator_back_W2_ring_VF(rm_array, dr, W1, W2, R_chamber) * A_W2 * e_W2 * sigma_sb * T_W2 ** 4 * absorptivity_back \
+        + calculator_IR_shield_to_sample_view_factors(rm_array, dr, W1 + W2, R_IRW) * A_IRW * e_IRW * sigma_sb * T_IRW ** 4 * absorptivity_back
+
+        Cm[0] = 1e-8
+
+
+    elif vacuum_chamber_setting['light_blocker'] == False:
+        # No light blocker
+        if numerical_simulation_setting['regression_parameter'] != 'sensitivity_analysis':
+            T_W1 = float(df_view_factor['T_W1_C']) + 273.15
+            T_W2 = float(df_view_factor['T_W2_C']) + 273.15
+        elif numerical_simulation_setting['regression_parameter'] == 'sensitivity_analysis':
+            # For sensitivity analysis these temperatures can be assigned manually
+            T_W1 = vacuum_chamber_setting['T_sur1']
+            T_W2 = vacuum_chamber_setting['T_sur1']
+
+        T_W3 = float(df_view_factor['T_W3_C']) + 273.15
+        T_glass = float(df_view_factor['T_glass_C']) + 273.15
+        T_IRW = float(df_view_factor['T_IRW_C']) + 273.15
+
+        W1 = float(df_view_factor['W1'])
+        W2 = float(df_view_factor['W2'])
+        W3 = float(df_view_factor['W3'])
+        L_G = float(df_view_factor['L_G'])
+        R_chamber = float(df_view_factor['R_chamber'])
+        R_IR_I = float(df_view_factor['R_IR_I'])
+        R_IR_O = R_chamber
+        R_G_O = R_chamber
+        L_IR = W2 + W3
+
+        A_W2 = 2 * np.pi * R_chamber * W2
+        A_W3 = 2 * np.pi * R_chamber * W3
+        A_W1 = 2 * np.pi * R_chamber * W1
+        A_glass = np.pi * R_G_O ** 2
+        A_IR_shield = np.pi * (R_IR_O ** 2 - R_IR_I ** 2)
+
+        VF_W1_front = calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W1, R_chamber)
+        VF_W2_back = calculator_back_W2_ring_VF(rm_array, dr, 1e-4, W2, R_chamber)
+        VF_W3_back = calculator_back_W2_ring_VF(rm_array, dr, W2, W3, R_chamber)
+        VF_glass = calculator_coaxial_parallel_rings_view_factors(1e-4, R_G_O, rm_array, dr, L_G)
+        VF_IR_shield = calculator_coaxial_parallel_rings_view_factors(R_IR_I, R_IR_O, rm_array,dr, L_IR)
+
+
+        Cm = 0.95*sigma_sb*VF_IR_shield*A_IR_shield*T_IRW**4 + 0.95*sigma_sb*VF_glass*A_glass*T_glass**4 + 0.95*sigma_sb*VF_W1_front*A_W1*T_W1**4 \
+        + sigma_sb*VF_W2_back*A_W2*T_W2**4 + sigma_sb*VF_W3_back*A_W3*T_W3**4
+        Cm[0] = 1e-8
+        T_LB_mean_C = T_W1
+
     return Cm, T_LB_mean_C
 
 
@@ -849,6 +896,7 @@ def mean_LB_temperatures(df_LB_temperature_details, focal_shift, VDC, R_inner_pi
 
     if R_outer_pixel < R_pixel_min:
         T_mean_C = -1
+
     else:
 
         T_LB1 = df_LB_temperature_details.query(
@@ -1416,171 +1464,6 @@ def lorentzian_Amax_sigma_estimation(d,code_directory):
     return f_Amax(d), f_sigma(d)
 
 
-"""
-# earlier version of the code, it assumes constant surrounding temperatures at front and back side of the sample
-
-def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
-                       light_source_property, numerical_simulation_setting,df_solar_simulator_VQ):
-
-    R = sample_information['R']
-    Nr = numerical_simulation_setting['Nr']
-    t_z = sample_information['t_z']
-
-    Fo_criteria = numerical_simulation_setting['Fo_criteria']
-
-    dr = R / Nr
-    dz = t_z
-
-    rho = sample_information['rho']
-    cp_const = sample_information['cp_const']  # Cp = cp_const + cp_c1*T+ cp_c2*T**2+cp_c3*T**3, T unit in K
-    cp_c1 = sample_information['cp_c1']
-    cp_c2 = sample_information['cp_c2']
-    cp_c3 = sample_information['cp_c3']
-    alpha_r = sample_information['alpha_r']
-    alpha_z = sample_information['alpha_z']
-    R0 = vacuum_chamber_setting['R0']
-
-    T_initial = sample_information['T_initial']  # unit in K
-    # k = alpha*rho*cp
-
-    f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
-    N_cycle = numerical_simulation_setting['N_cycle']
-
-    T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
-    T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
-
-    simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
-
-    emissivity = sample_information['emissivity']  # assumed to be constant
-    absorptivity = sample_information['absorptivity']  # assumed to be constant
-    sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
-
-    #print(N_cycle)
-    #print(f_heating)
-    dt = min(Fo_criteria * (dr ** 2) / (alpha_r), 1/f_heating/15)  # assume 15 samples per period, Fo_criteria default = 1/3
-
-
-    t_total = 1 / f_heating * N_cycle  # total simulation time
-
-    Nt = int(t_total / dt)  # total number of simulation time step
-    time_simulation = dt * np.arange(Nt)
-    r = np.arange(Nr)
-    rm = r * dr
-
-    Fo_r = alpha_r * dt / dr ** 2
-
-    # Rs = vacuum_chamber_setting['Rs']  # the location where the solar light shines on the sample
-    # N_Rs = int(Rs / R * Nr)
-
-    N_Rs = int(vacuum_chamber_setting['N_Rs']) # max pixels that solar light shine upon
-
-    T = T_initial * np.ones((Nt, Nr))
-
-    vectorize = numerical_simulation_setting['vectorize']
-
-    sigma_s = light_source_property['sigma_s']
-
-
-    if vectorize:
-
-        # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
-        #                                            solar_simulator_settings, light_source_property)
-
-        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
-                                                           solar_simulator_settings, vacuum_chamber_setting, df_solar_simulator_VQ, sigma_s)
-
-
-        T_temp = np.zeros(Nr)
-        N_steady_count = 0
-        time_index = Nt - 1
-        N_one_cycle = int(Nt/N_cycle)
-        #A_initial = 100
-
-        for p in range(Nt - 1):  # p indicate time step
-
-            cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
-            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - 2 * sigma_sb * emissivity * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
-                          dt / (rho * cp * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *q_solar[p, 0])
-
-            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
-                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 \
-                             + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity * q_solar[p,1:-1] - 2 * emissivity * sigma_sb * T[p,1:-1] ** 4)
-
-            cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
-            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) - 2 * dt * emissivity * sigma_sb / (rho * cp) * (1 / dz + 1 / dr) * T[p, -1] ** 4 + 2 * Fo_r * T[p, -2] + \
-                           dt / (rho * cp * dz) * (absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * sigma_sb * T_sur2 ** 4 + absorptivity *q_solar[p, -1]) \
-                           + 2 * dt / (rho * cp * dr) * absorptivity * sigma_sb * T_sur2 ** 4
-
-            if (p>0) & (p % N_one_cycle ==0) & (simulated_amp_phase_extraction_method != 'fft'):
-                A_max = np.max(T[p-N_one_cycle:p,:],axis = 0)
-                A_min = np.min(T[p-N_one_cycle:p,:],axis = 0)
-                if np.max(np.abs((T_temp[:] - T[p,:])/(A_max-A_min)))<1e-2:
-                    N_steady_count += 1
-                    if N_steady_count == 2: # only need 2 periods to calculate amplitude and phase
-                        time_index = p
-                        print("stable temperature profile has been obtained @ iteration N= {}!".format(int(p/N_one_cycle)))
-                        break
-                T_temp = T[p, :]
-
-            if p == Nt-2:
-                time_index = p
-                #T_temp = T[p, :]
-                print("Error! No stable temperature profile was obtained!")
-    else:
-        q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
-        time_index = Nt - 1
-
-        for i in range(N_Rs):  # truncated solar light
-            for j in range(Nt):
-                q_solar[j, i] = light_source_intensity(i * dr, j * dt, solar_simulator_settings, light_source_property)
-
-        for p in range(Nt - 1):  # p indicate time step
-            for m in range(Nr):  # m indicate node along radial direction
-                rm = dr * m
-                cp = cp_const + cp_c1 * T[p, m] + cp_c2 * T[p, m] ** 2 + cp_c3 * T[p, m] ** 3
-
-                if m == 0:
-                    # consider V1
-                    T[p + 1, m] = T[p, m] + 4 * Fo_r * (T[p, m + 1] - T[p, m]) + \
-                                  dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * q_solar[
-                                          p, m] - emissivity * sigma_sb * T[p, m] ** 4) + \
-                                  dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
-                                          p, m] ** 4)
-
-                elif m == Nr - 1:
-                    # consider V2
-                    T[p + 1, m] = T[p, m] + 2 * (rm - dr / 2) / rm * Fo_r * (T[p, m - 1] - T[p, m]) + \
-                                  dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * q_solar[
-                                          p, m] - emissivity * sigma_sb * T[p, m] ** 4) \
-                                  + 2 * dt / (rho * cp * dr) * (
-                                              absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
-                                          p, m] ** 4) \
-                                  + dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
-                                          p, m] ** 4)
-
-                elif m >= 1 and m != Nr - 1:
-                    # Consider E1
-                    T[p + 1, m] = T[p, m,] + Fo_r * (rm - dr / 2) / rm * (T[p, m - 1] - T[p, m]) + Fo_r * (
-                                rm + dr / 2) / rm * (T[p, m + 1] - T[p, m]) \
-                                  + dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur1 ** 4 + absorptivity * q_solar[
-                                          p, m] - emissivity * sigma_sb * T[p, m] ** 4) \
-                                  + dt / (rho * cp * dz) * (
-                                              absorptivity * sigma_sb * T_sur2 ** 4 - emissivity * sigma_sb * T[
-                                          p, m] ** 4)
-                    
-    #print(vacuum_chamber_setting['focal_shift'])
-    print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}.'.format(alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating, solar_simulator_settings['rec_name'],vacuum_chamber_setting['T_sur1']))
-
-    return T[:time_index], time_simulation[:time_index], r, N_one_cycle
-
-"""
-
-
 def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,
                        sigma_df,code_directory,df_view_factor,df_LB_details_all):
@@ -1593,9 +1476,10 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     Nr = numerical_simulation_setting['Nr']
     t_z = sample_information['t_z']
 
-    Fo_criteria = numerical_simulation_setting['Fo_criteria']
-
     dr = R / Nr
+    r = np.arange(Nr)
+    rm = r * dr
+
     dz = t_z
 
     rho = sample_information['rho']
@@ -1620,213 +1504,175 @@ def radial_1D_explicit(sample_information, vacuum_chamber_setting, solar_simulat
     emissivity_back = sample_information['emissivity_back']  # assumed to be constant
 
     absorptivity_front = sample_information['absorptivity_front']  # assumed to be constant
-    absorptivity_back = sample_information['absorptivity_back']  # assumed to be constant
-
-
 
     sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
 
-    # print(N_cycle)
-    # print(f_heating)
-    dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
-             1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
 
-    t_total = 1 / f_heating * N_cycle  # total simulation time
+    # The radioan absorption view factor contains the following cases:
+    # (1) With light blocker: (a) Sensitivity analysis: Light blocker has the same temperature. (b) Regression analysis: Light blocker has radial varied temperature
+    # (2) Without light blocker: (a) Sensitivity analysis: Surroundings are treated as the same temperature (not including glass and IR radiation shield). (b) Regression: Surrounding temperature are treated differently.
+    # These cases are handled internally within the function
 
-    Nt = int(t_total / dt)  # total number of simulation time step
-    time_simulation = dt * np.arange(Nt)
-    r = np.arange(Nr)
-    rm = r * dr
+    Cm, T_LB_mean_C = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information,
+                                                                    solar_simulator_settings,
+                                                                    vacuum_chamber_setting,
+                                                                    numerical_simulation_setting,
+                                                                    df_view_factor, df_LB_details_all)
 
-    Fo_r = alpha_r * dt / dr ** 2
+    if (numerical_simulation_setting['analysis_mode'] == 'sensitivity') or (
+            (numerical_simulation_setting['analysis_mode'] == 'regression') and (numerical_simulation_setting['regression_parameter'] == 'alpha_r')):
+        # For sensitivity analysis and regression over thermal diffusivity, thermal diffusivity is treated as a constant throughout the sample
 
-    # Rs = vacuum_chamber_setting['Rs']  # the location where the solar light shines on the sample
-    # N_Rs = int(Rs / R * Nr)
-
-    N_Rs = int(vacuum_chamber_setting['N_Rs'])  # max pixels that solar light shine upon
-
-    T = T_initial * np.ones((Nt, Nr))
-
-    vectorize = numerical_simulation_setting['vectorize']
-    view_factor_setting = numerical_simulation_setting['view_factor_setting']
-
-    #sigma_s = light_source_property['sigma_s']
-
-    if (vectorize and view_factor_setting == False):
-
-        T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
-        T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
-
-        # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs,
-        #                                            solar_simulator_settings, light_source_property)
-
-        # q_solar = light_source_intensity_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt, N_Rs, solar_simulator_settings, light_source_property)
-
-        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
-                                                           solar_simulator_settings, vacuum_chamber_setting,light_source_property,
-                                                           df_solar_simulator_VQ, sigma_df)
-
-        T_temp = np.zeros(Nr)
-        N_steady_count = 0
-        time_index = Nt - 1
-        N_one_cycle = int(Nt / N_cycle)
-        # A_initial = 100
-
-        for p in range(Nt - 1):  # p indicate time step
-
-            cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
-            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - sigma_sb * (emissivity_front + emissivity_back) * dt / (
-                        rho * cp * dz) * T[p, 0] ** 4 + \
-                          dt / (rho * cp * dz) * (
-                                      absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front *
-                                      q_solar[p, 0])
-
-            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (
-                        rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
-                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front * q_solar[p,1:-1] - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
-
-            cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
-            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) - dt * (emissivity_front + emissivity_back) * sigma_sb / (rho * cp) * (1 / dz + 1 / dr) * \
-                           T[p, -1] ** 4 + 2 * Fo_r * T[p, -2] + \
-                           dt / (rho * cp * dz) * (absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_back * sigma_sb * T_sur2 ** 4 + absorptivity_front *q_solar[p, -1]) \
-                           + 2 * dt / (rho * cp * dr) * absorptivity_back * sigma_sb * T_sur2 ** 4
-
-            if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
-                A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
-                A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
-                if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
-                    N_steady_count += 1
-                    if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
-                        time_index = p
-                        print("stable temperature profile has been obtained @ iteration N= {}!".format(
-                            int(p / N_one_cycle)))
-                        break
-                T_temp = T[p, :]
-
-            if p == Nt - 2:
-                time_index = p
-                # T_temp = T[p, :]
-                print("Error! No stable temperature profile was obtained!")
-
-        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}, e_front = {:.2f}.'.format(
-            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1'], sample_information['emissivity_front']))
+        Fo_criteria = numerical_simulation_setting['Fo_criteria']
 
 
-    elif (vectorize and view_factor_setting == True):
+        dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
+                 1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
+
+        t_total = 1 / f_heating * N_cycle  # total simulation time
+
+        Nt = int(t_total / dt)  # total number of simulation time step
+        time_simulation = dt * np.arange(Nt)
+
+        Fo_r = alpha_r * dt / dr ** 2
+
+        T = T_initial * np.ones((Nt, Nr))
+
+        if numerical_simulation_setting['axial_conduction'] == False:
+        # Is the problem 1D?
+
+            q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                                   solar_simulator_settings, vacuum_chamber_setting,
+                                                                   light_source_property,
+                                                                   df_solar_simulator_VQ, sigma_df)
+            T_temp = np.zeros(Nr)
+            N_steady_count = 0
+            time_index = Nt - 1
+            N_one_cycle = int(Nt / N_cycle)
+
+            for p in range(Nt - 1):  # p indicate time step
+
+                # The node at center of the disk
+                cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
+
+                T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - sigma_sb * (emissivity_back + emissivity_front) * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
+                              dt / (rho * cp * dz) * (absorptivity_front * q_solar[p, 0] + 4*Cm[0]/(np.pi*dr**2))
 
 
-        Cm,T_LB_mean_C = radiation_absorption_view_factor_calculations(code_directory, rm, dr, sample_information, solar_simulator_settings,vacuum_chamber_setting, numerical_simulation_setting,df_view_factor,df_LB_details_all)
+                # The node in the middle of disk
+                T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
+                                 + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * q_solar[p,1:-1] + Cm[1:-1]/(2*np.pi*rm[1:-1]*dr) - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
 
 
-        q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
-                                                           solar_simulator_settings, vacuum_chamber_setting,light_source_property,
-                                                           df_solar_simulator_VQ, sigma_df)
+                # The node at the edge of the disk
+                cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
+                T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) + 2 * Fo_r *T [p, -2] + absorptivity_front*dt*q_solar[p, -1]/(dz*rho*cp) + 2*rm[-1]*absorptivity_front*sigma_sb*dt*T_LBW**4/((rm[-1]-dr/2)*dr*rho*cp) + Cm[-1]*dt/(np.pi*(rm[-1]-dr/2)*dr*dz*rho*cp) - \
+                               (emissivity_front+emissivity_back)*sigma_sb*dt/(dz*rho*cp)*T[p, -1]**4 - 2*rm[-1]*emissivity_back*sigma_sb*dt*T[p, -1]**4/((rm[-1]-dr/2)*dr*rho*cp)
 
 
-        T_temp = np.zeros(Nr)
-        N_steady_count = 0
-        time_index = Nt - 1
-        N_one_cycle = int(Nt / N_cycle)
-        # A_initial = 100
+                if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
+                    A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
+                    A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
+                    if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
+                        N_steady_count += 1
+                        if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
+                            time_index = p
+                            print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                                int(p / N_one_cycle)))
+                            break
+                    T_temp = T[p, :]
 
-        for p in range(Nt - 1):  # p indicate time step
+                if p == Nt - 2:
+                    time_index = p
+                    # T_temp = T[p, :]
+                    print("Error! No stable temperature profile was obtained!")
 
-            # The node at center of the disk
-            cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
+        elif numerical_simulation_setting['axial_conduction'] == True:
+            # 2D conduction
+            pass
 
-            T[p + 1, 0] = T[p, 0] * (1 - 4 * Fo_r) + 4 * Fo_r * T[p, 1] - sigma_sb * (emissivity_back + emissivity_front) * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
-                          dt / (rho * cp * dz) * (absorptivity_front * q_solar[p, 0] + 4*Cm[0]/(np.pi*dr**2))
+    elif (numerical_simulation_setting['analysis_mode'] == 'regression') and (numerical_simulation_setting['regression_parameter'] != 'alpha_r'):
 
+        Fo_criteria = numerical_simulation_setting['Fo_criteria']
+        alpha_r_A = float(sample_information['alpha_r_A'])
+        alpha_r_B = float(sample_information['alpha_r_B'])
 
-            # The node in the middle of disk
-            T[p + 1, 1:-1] = T[p, 1:-1] + Fo_r * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + Fo_r * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
-                             + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * q_solar[p,1:-1] + Cm[1:-1]/(2*np.pi*rm[1:-1]*dr) - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
+        T_min = sample_information['T_min']
+        alpha_max = 1/(alpha_r_A*T_min+alpha_r_B)
 
+        dr = R / Nr
+        dt = min(Fo_criteria * (dr ** 2) / (alpha_max),
+                 1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
 
-            # The node at the edge of the disk
-            cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
-            T[p + 1, -1] = T[p, -1] * (1 - 2 * Fo_r) + 2 * Fo_r *T [p, -2] + absorptivity_front*dt*q_solar[p, -1]/(dz*rho*cp) + 2*rm[-1]*absorptivity_front*sigma_sb*dt*T_LBW**4/((rm[-1]-dr/2)*dr*rho*cp) + Cm[-1]*dt/(np.pi*(rm[-1]-dr/2)*dr*dz*rho*cp) - \
-                           (emissivity_front+emissivity_back)*sigma_sb*dt/(dz*rho*cp)*T[p, -1]**4 - 2*rm[-1]*emissivity_back*sigma_sb*dt*T[p, -1]**4/((rm[-1]-dr/2)*dr*rho*cp)
+        t_total = 1 / f_heating * N_cycle  # total simulation time
 
+        Nt = int(t_total / dt)  # total number of simulation time step
+        time_simulation = dt * np.arange(Nt)
+        r = np.arange(Nr)
+        rm = r * dr
 
-            if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
-                A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
-                A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
-                if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
-                    N_steady_count += 1
-                    if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
-                        time_index = p
-                        print("stable temperature profile has been obtained @ iteration N= {}!".format(
-                            int(p / N_one_cycle)))
-                        break
-                T_temp = T[p, :]
-
-            if p == Nt - 2:
-                time_index = p
-                # T_temp = T[p, :]
-                print("Error! No stable temperature profile was obtained!")
-
-        print('alpha_r = {:.2E}, focal plane = {} cm, sigma_s = {:.2E}, f_heating = {} Hz, Rec = {}, T_LB_mean = {:.1f} K, e_front = {:.2f}.'.format(
-            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], T_LB_mean_C + 273.15, sample_information['emissivity_front']))
+        T = T_initial * np.ones((Nt, Nr))
 
 
-    else: # do not use non-vectorized code whenever possible, runs too slow
+        if numerical_simulation_setting['axial_conduction'] == False:
+            # 1D conduction here
 
-        T_sur1 = vacuum_chamber_setting['T_sur1']  # unit in K
-        T_sur2 = vacuum_chamber_setting['T_sur2']  # unit in K
+            q_solar = light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                                   solar_simulator_settings, vacuum_chamber_setting,
+                                                                   light_source_property,
+                                                                   df_solar_simulator_VQ, sigma_df)
+            T_temp = np.zeros(Nr)
+            N_steady_count = 0
+            time_index = Nt - 1
+            N_one_cycle = int(Nt / N_cycle)
+
+            for p in range(Nt - 1):  # p indicate time step
+
+                # The node at center of the disk
+                cp = cp_const + cp_c1 * T[p, 0] + cp_c2 * T[p, 0] ** 2 + cp_c3 * T[p, 0] ** 3
+                alpha_r_c = 1/(alpha_r_A*T[p, 0]+alpha_r_B)
+
+                T[p + 1, 0] = T[p, 0] * (1 - 4 * (alpha_r_c*dt/dr**2)) + 4 * (alpha_r_c*dt/dr**2) * T[p, 1] - sigma_sb * (emissivity_back + emissivity_front) * dt / (rho * cp * dz) * T[p, 0] ** 4 + \
+                              dt / (rho * cp * dz) * (absorptivity_front * q_solar[p, 0] + 4*Cm[0]/(np.pi*dr**2))
 
 
-        q_solar = np.zeros((Nt, Nr))  # heat flux of the solar simulator
-        time_index = Nt - 1
+                # The node in the middle of disk
 
-        for i in range(N_Rs):  # truncated solar light
-            for j in range(Nt):
-                q_solar[j, i] = light_source_intensity(i * dr, j * dt, solar_simulator_settings, light_source_property)
+                T[p + 1, 1:-1] = T[p, 1:-1] + ((1/(alpha_r_A*T[p, 1:-1]+alpha_r_B))*dt/dr**2) * (rm[1:-1] - dr / 2) / rm[1:-1] * (T[p, 0:-2] - T[p, 1:-1]) + ((1/(alpha_r_A*T[p, 1:-1]+alpha_r_B))*dt/dr**2) * (rm[1:-1] + dr / 2) / rm[1:-1] * (T[p, 2:] - T[p, 1:-1]) \
+                                 + dt / (rho * (cp_const + cp_c1 * T[p, 1:-1] + cp_c2 * T[p, 1:-1] ** 2 + cp_c3 * T[p, 1:-1] ** 3) * dz) * (absorptivity_front * q_solar[p,1:-1] + Cm[1:-1]/(2*np.pi*rm[1:-1]*dr) - (emissivity_front + emissivity_back) * sigma_sb * T[p,1:-1] ** 4)
 
-        for p in range(Nt - 1):  # p indicate time step
-            for m in range(Nr):  # m indicate node along radial direction
-                rm = dr * m
-                cp = cp_const + cp_c1 * T[p, m] + cp_c2 * T[p, m] ** 2 + cp_c3 * T[p, m] ** 3
 
-                if m == 0:
-                    # consider V1
-                    T[p + 1, m] = T[p, m] + 4 * Fo_r * (T[p, m + 1] - T[p, m]) + \
-                                  dt / (rho * cp * dz) * (
-                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
-                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) + \
-                                  dt / (rho * cp * dz) * (
-                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
-                                      p, m] ** 4)
+                # The node at the edge of the disk
+                cp = cp_const + cp_c1 * T[p, -1] + cp_c2 * T[p, -1] ** 2 + cp_c3 * T[p, -1] ** 3
+                alpha_r_e = 1/(alpha_r_A*T[p, -1]+alpha_r_B)
+                T[p + 1, -1] = T[p, -1] * (1 - 2 * (alpha_r_e*dt/dr**2)) + 2 * (alpha_r_e*dt/dr**2) *T [p, -2] + absorptivity_front*dt*q_solar[p, -1]/(dz*rho*cp) + 2*rm[-1]*absorptivity_front*sigma_sb*dt*T_LBW**4/((rm[-1]-dr/2)*dr*rho*cp) + Cm[-1]*dt/(np.pi*(rm[-1]-dr/2)*dr*dz*rho*cp) - \
+                               (emissivity_front+emissivity_back)*sigma_sb*dt/(dz*rho*cp)*T[p, -1]**4 - 2*rm[-1]*emissivity_back*sigma_sb*dt*T[p, -1]**4/((rm[-1]-dr/2)*dr*rho*cp)
 
-                elif m == Nr - 1:
-                    # consider V2
-                    T[p + 1, m] = T[p, m] + 2 * (rm - dr / 2) / rm * Fo_r * (T[p, m - 1] - T[p, m]) + \
-                                  dt / (rho * cp * dz) * (
-                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
-                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) \
-                                  + 2 * dt / (rho * cp * dr) * (
-                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
-                                      p, m] ** 4) \
-                                  + dt / (rho * cp * dz) * (
-                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
-                                      p, m] ** 4)
 
-                elif m >= 1 and m != Nr - 1:
-                    # Consider E1
-                    T[p + 1, m] = T[p, m,] + Fo_r * (rm - dr / 2) / rm * (T[p, m - 1] - T[p, m]) + Fo_r * (
-                            rm + dr / 2) / rm * (T[p, m + 1] - T[p, m]) \
-                                  + dt / (rho * cp * dz) * (
-                                          absorptivity_front * sigma_sb * T_sur1 ** 4 + absorptivity_front * q_solar[
-                                      p, m] - emissivity_front * sigma_sb * T[p, m] ** 4) \
-                                  + dt / (rho * cp * dz) * (
-                                          absorptivity_back * sigma_sb * T_sur2 ** 4 - emissivity_back * sigma_sb * T[
-                                      p, m] ** 4)
+                if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
+                    A_max = np.max(T[p - N_one_cycle:p, :], axis=0)
+                    A_min = np.min(T[p - N_one_cycle:p, :], axis=0)
+                    if np.max(np.abs((T_temp[:] - T[p, :]) / (A_max - A_min))) < 2e-3:
+                        N_steady_count += 1
+                        if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
+                            time_index = p
+                            print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                                int(p / N_one_cycle)))
+                            break
+                    T_temp = T[p, :]
 
-        print('alpha_r = {:.2E}, focal plane = {}, sigma_s = {:.2E}, f_heating = {}, Rec = {}, T_sur1 = {:.1f}., e_front = {:.2f}'.format(
-            alpha_r, vacuum_chamber_setting['focal_shift'], light_source_property['sigma_s'], f_heating,
-            solar_simulator_settings['rec_name'], vacuum_chamber_setting['T_sur1']), sample_information['emissivity_front'])
+                if p == Nt - 2:
+                    time_index = p
+                    # T_temp = T[p, :]
+                    print("Error! No stable temperature profile was obtained!")
+
+
+
+        elif numerical_simulation_setting['axial_conduction'] == True:
+            # 2D conduction
+            pass
+
+
 
     return T[:time_index], time_simulation[:time_index], r, N_one_cycle
 
@@ -1874,20 +1720,20 @@ def residual_update(params, df_amplitude_phase_measurement, sample_information, 
     regression_method = numerical_simulation_setting['regression_method']
 
 
-    if numerical_simulation_setting['regression_result_type'] == 'sigma_s':
+    if numerical_simulation_setting['regression_parameter'] == 'sigma_s':
         if regression_module == 'lmfit':
             light_source_property['sigma_s'] = params['sigma_s'].value
         elif regression_module == 'scipy.optimize-NM':
             light_source_property['sigma_s'] = params[0]
 
-    elif numerical_simulation_setting['regression_result_type'] == 'alpha_r':
+    elif numerical_simulation_setting['regression_parameter'] == 'alpha_r':
         if regression_module == 'lmfit':
             sample_information['alpha_r'] = params['alpha_r'].value
             #print("params['alpha_r']: "+str(params['alpha_r']))
         elif regression_module == 'scipy.optimize-NM':
             sample_information['alpha_r'] = params[0]
 
-    elif numerical_simulation_setting['regression_result_type'] == 'emissivity_front':
+    elif numerical_simulation_setting['regression_parameter'] == 'emissivity_front':
         if regression_module == 'lmfit':
             sample_information['emissivity_front'] = params['emissivity_front'].value
             #print("params['alpha_r']: "+str(params['alpha_r']))
@@ -2358,7 +2204,7 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
 
-    if df_exp_condition_i['regression_result_type'] == 'sigma_s':
+    if df_exp_condition_i['regression_parameter'] == 'sigma_s':
         T_sur1 = float(df_exp_condition_i['T_sur1'])
         T_sur2 = float(df_exp_condition_i['T_sur2'])
     else:
@@ -2371,6 +2217,7 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
                               'focal_shift': focal_shift, 'R_analysis': R_analysis}
     # vacuum_chamber_setting
 
+    #regression_method: either using amplitude and phase, or one of these two
     numerical_simulation_setting = {'Nz': int(df_exp_condition_i['Nz']), 'Nr': int(df_exp_condition_i['Nr']),
                                     'equal_grid': df_exp_condition_i['equal_grid'],
                                     'N_cycle': int(df_exp_condition_i['N_cycle']),
@@ -2381,7 +2228,7 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
                                     'gap': int(df_exp_condition_i['gap']),
                                     'regression_module': df_exp_condition_i['regression_module'],
                                     'regression_method': df_exp_condition_i['regression_method'],
-                                    'regression_result_type': df_exp_condition_i['regression_result_type'],
+                                    'regression_parameter': df_exp_condition_i['regression_parameter'],
                                     'regression_residual_converging_criteria': df_exp_condition_i[
                                         'regression_residual_converging_criteria'],
                                     'view_factor_setting': df_exp_condition_i['view_factor_setting']
@@ -2403,7 +2250,7 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
 
 
 
-    param_name = df_exp_condition_i['regression_result_type']
+    param_name = df_exp_condition_i['regression_parameter']
 
 
     if param_name == 'alpha_r':
@@ -2559,21 +2406,6 @@ def parallel_result_visualization(df_exp_condition_spreadsheet_filename, df_resu
 
 def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_directory, df_amplitude_phase_measurement,df_temperature,df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all):
 
-    # this is an excel file that contains sample's basic thermal properties and solar simulator characteristics
-
-
-
-
-    # df_solar_simulator_VQ = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-    #                                   sheet_name="9_14_Amax_Fv_d_correlations")
-    #
-    # sigma_df = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-    #                                   sheet_name="9_14_sigma")
-
-    #df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//9_14_Amax_Fv_d_correlations.csv")
-
-    #sigma_df = pd.read_csv(code_directory + "sample specifications//Lorentzian sigma.csv")
-
 
     sample_name = df_exp_condition['sample_name']
     df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
@@ -2583,37 +2415,39 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     rec_name = df_exp_condition['rec_name']
     view_factor_setting = df_exp_condition['view_factor_setting']
 
-
     regression_module = df_exp_condition['regression_module']
 
 
     focal_shift = float(df_exp_condition['focal_shift'])
     VDC = float(df_exp_condition['V_DC'])
 
-    if df_exp_condition['regression_result_type'] == 'sigma_s':
-        T_sur1 = float(df_exp_condition['T_sur1'])
-        T_sur2 = float(df_exp_condition['T_sur2'])
-    else:
-        T_sur1 = None
-        T_sur2 = None
+    T_sur1 = float(df_exp_condition['T_sur1'])
+    T_sur2 = float(df_exp_condition['T_sur2'])
 
     # We need to evaluate the sample's average temperature in the region of analysis, and feed in a thermal diffusivity value from a reference source, this will be important for sigma measurement
 
     R0 = int(df_exp_condition['R0'])
     R_analysis  = int(df_exp_condition['R_analysis'])
 
+    Nr = int(df_exp_condition['Nr'])
 
+    alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
+    alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
-    df_thermal_diffusivity_temperature = df_thermal_diffusivity_temperature_all.query("Material=='{}'".format(sample_name))
-
-    f_thermal_duffisivity_T = interp1d(df_thermal_diffusivity_temperature['Temperature C'], df_thermal_diffusivity_temperature['Thermal diffsivity'])
+    #df_thermal_diffusivity_temperature = df_thermal_diffusivity_temperature_all.query("Material=='{}'".format(sample_name))
+    #f_thermal_duffisivity_T = interp1d(df_thermal_diffusivity_temperature['Temperature C'], df_thermal_diffusivity_temperature['Thermal diffsivity'])
+    #alpha_r = f_thermal_duffisivity_T(T_average - 273.15) #convert back to C
 
 
     T_average = np.sum(
         [2 * np.pi *  m_ *  np.mean(df_temperature.iloc[:, m_]) for m_ in np.arange(R0, R_analysis+R0, 1)]) / (
                         ((R_analysis+R0) ** 2 - (R0) ** 2) * np.pi) # unit in K
-    alpha_r = f_thermal_duffisivity_T(T_average - 273.15) #convert back to C
 
+    #np.min(df_temperature_list[0].loc[:, df_temperature_list[0].columns != 'reltime'].min())
+
+    T_min = np.min(df_temperature.iloc[:, Nr-15])
+
+    alpha_r = 1/(alpha_r_A*T_average+alpha_r_B)
 
     sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
                           'rho': float(df_sample_cp_rho_alpha['rho']),
@@ -2625,30 +2459,30 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                           'absorptivity_front': df_exp_condition['absorptivity_front'],
                           'emissivity_back': df_exp_condition['emissivity_back'],
                           'absorptivity_back': df_exp_condition['absorptivity_back'],
-                          'sample_name':sample_name}
+                          'sample_name':sample_name,'T_min':T_min,'alpha_r_A':alpha_r_A,'alpha_r_B':alpha_r_B}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
+    # Indicate where light_blocker is used or not, option here: True, False
 
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': R0,
                               'T_sur1': T_sur1, 'T_sur2': T_sur2,
-                              'focal_shift':focal_shift,'R_analysis':R_analysis}
+                              'focal_shift':focal_shift,'R_analysis':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
     # vacuum_chamber_setting
 
-    numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': int(df_exp_condition['Nr']),
+    numerical_simulation_setting = {'Nz': int(df_exp_condition['Nz']), 'Nr': Nr,
                                     'equal_grid': df_exp_condition['equal_grid'],
                                     'N_cycle': int(df_exp_condition['N_cycle']),
-                                    'vectorize': True,
                                     'Fo_criteria': float(df_exp_condition['Fo_criteria']),
                                     'simulated_amp_phase_extraction_method': df_exp_condition['simulated_amp_phase_extraction_method'],
                                     'gap': int(df_exp_condition['gap']),
                                     'regression_module': df_exp_condition['regression_module'],
                                     'regression_method': df_exp_condition['regression_method'],
-                                    'regression_result_type': df_exp_condition['regression_result_type'],
+                                    'regression_parameter': df_exp_condition['regression_parameter'],
                                     'regression_residual_converging_criteria': df_exp_condition[
-                                        'regression_residual_converging_criteria'],'view_factor_setting':df_exp_condition['view_factor_setting']
-                                    }
-    # the code is executed using vectorized approach by default
+                                        'regression_residual_converging_criteria'],'view_factor_setting':df_exp_condition['view_factor_setting'],
+                                    'axial_conduction':df_exp_condition['axial_conduction'],
+                                    'analysis_mode':df_exp_condition['analysis_mode']}
 
     # numerical_simulation_setting
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
@@ -2668,7 +2502,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
         params = Parameters()
 
-        if df_exp_condition['regression_result_type'] == 'alpha_r':
+        if df_exp_condition['regression_parameter'] == 'alpha_r':
             params.add('alpha_r', value=float(df_exp_condition['p_initial']), min=1e-8)
 
             out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
@@ -2677,7 +2511,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
             regression_result = out.params['alpha_r'].value
 
-        elif df_exp_condition['regression_result_type'] == 'sigma_s':
+        elif df_exp_condition['regression_parameter'] == 'sigma_s':
             params.add('sigma_s', value=float(df_exp_condition['p_initial']), min=1e-4, max= 5e-1)
 
             out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
@@ -2686,7 +2520,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
             regression_result = out.params['sigma_s'].value
 
-        elif df_exp_condition['regression_result_type'] == 'emissivity_front':
+        elif df_exp_condition['regression_parameter'] == 'emissivity_front':
             params.add('emissivity_front', value=float(df_exp_condition['p_initial']), min=0.05, max = 1)
 
             out = lmfit.minimize(residual_update, params, args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
@@ -2703,12 +2537,6 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                                 tol=df_exp_condition['regression_residual_converging_criteria'])
         regression_result = res['final_simplex'][0][0][0]
 
-    # fig_regression, T_average, amp_residual_mean, phase_residual_mean, total_residual_mean = show_regression_results(
-    #     df_exp_condition['regression_result_type'], regression_result, df_temperature,
-    #     df_amplitude_phase_measurement, sample_information,
-    #     vacuum_chamber_setting, solar_simulator_settings,
-    #     light_source_property,
-    #     numerical_simulation_setting,code_directory)
 
     print("recording {} completed.".format(rec_name))
     return regression_result, T_average
@@ -2991,7 +2819,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,
     sigma_s_list = []
     alpha_list = []
 
-    for i,regression_type in enumerate(df_exp_condition['regression_result_type']):
+    for i,regression_type in enumerate(df_exp_condition['regression_parameter']):
         if regression_type == 'sigma_s':
             sigma_s_list.append(joblib_output[i][0])
             alpha_list.append(df_exp_condition['alpha_r'][i])
@@ -3001,7 +2829,7 @@ def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,
 
     df_results_all = pd.DataFrame({'rec_name':df_exp_condition['rec_name'],'f_heating':df_exp_condition['f_heating'],'VDC':df_exp_condition['V_DC'],
                                    'sigma_s':sigma_s_list,'T_average':T_average_list,'R0':df_exp_condition['R0'],'alpha_r':alpha_list,
-                                   'regression_parameter':df_exp_condition['regression_result_type'],'T_sur1':df_exp_condition['T_sur1'],'emissivity':df_exp_condition['emissivity'],
+                                   'regression_parameter':df_exp_condition['regression_parameter'],'T_sur1':df_exp_condition['T_sur1'],'emissivity':df_exp_condition['emissivity'],
                                    'amp_res':amp_ratio_residual_list,'phase_res':phase_diff_residual_list,'amp_phase_res':amp_phase_residual_list})
     return df_results_all
 
@@ -3589,9 +3417,20 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
         df_main_effect_relative_list.append(df_main_effect_relative)
 
         for parameter_name in parameter_name_columns:
-            axes[0, i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=parameter_name)
+            if parameter_name == 'alpha_r':
+                legend_temp = 'Thermal diffusivity: '+ r'$\alpha$'
+            elif parameter_name == 'Amax':
+                legend_temp = 'Peak nominal intensity: '+ r'$A_{max}$'
+            elif parameter_name == 'sigma_s':
+                legend_temp = 'Intensity distribution: '+r'$\sigma$'
+            elif parameter_name == 'emissivity_front':
+                legend_temp = 'Front emissivity: '+ r'$\epsilon$'
+            elif parameter_name == 'absorptivity_front':
+                legend_temp = 'Front absorptivity: '+r'$\eta$'
+
+            axes[0, i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=legend_temp)
             axes[1, i].scatter(df_main_effect_relative['r'], df_main_effect_relative[parameter_name],
-                               label=parameter_name)
+                               label=legend_temp)
 
         axes[0, i].set_xlabel('R(pixel)', fontsize=12, fontweight='bold')
         axes[0, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
