@@ -761,7 +761,7 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
 
     if vacuum_chamber_setting['light_blocker'] == True:
 
-        if numerical_simulation_setting['regression_parameter'] != 'sensitivity_analysis':
+        if numerical_simulation_setting['analysis_mode'] != 'sensitivity':
 
             if sample_name == 'copper':
                 df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
@@ -832,10 +832,10 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
 
     elif vacuum_chamber_setting['light_blocker'] == False:
         # No light blocker
-        if numerical_simulation_setting['regression_parameter'] != 'sensitivity_analysis':
+        if numerical_simulation_setting['analysis_mode'] != 'sensitivity':
             T_W1 = float(df_view_factor['T_W1_C']) + 273.15
             T_W2 = float(df_view_factor['T_W2_C']) + 273.15
-        elif numerical_simulation_setting['regression_parameter'] == 'sensitivity_analysis':
+        elif numerical_simulation_setting['analysis_mode'] == 'sensitivity':
             # For sensitivity analysis these temperatures can be assigned manually
             T_W1 = vacuum_chamber_setting['T_sur1']
             T_W2 = vacuum_chamber_setting['T_sur1']
