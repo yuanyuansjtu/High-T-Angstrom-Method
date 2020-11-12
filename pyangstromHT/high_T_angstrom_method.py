@@ -1663,7 +1663,10 @@ def finite_difference_explicit_1D_const_cp_alpha(sample_information, vacuum_cham
     dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
              1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
 
-    t_total = 1 / f_heating * N_cycle  # total simulation time
+    if f_heating >0:
+        t_total = 1 / f_heating * N_cycle  # total simulation time
+    elif f_heating ==0:
+        t_total = 100 # just simulate 100s
 
     Nt = int(t_total / dt)  # total number of simulation time step
     time_simulation = dt * np.arange(Nt)
@@ -3119,7 +3122,7 @@ def simulation_result_amplitude_phase_extraction(sample_information,
     gap = numerical_simulation_setting['gap']
 
     # I want max 50 samples per period
-    N_skip_time = max(int(N_one_cycle / 50),1) # avoid N_skip to be zero
+    N_skip_time = max(int(N_one_cycle /numerical_simulation_setting['N_simulated_sample_each_cycle']),1) # avoid N_skip to be zero
 
     if numerical_simulation_setting['axial_conduction'] == True:
         T_ = T_temp[:,:,-1] # only take temperature profiles at the last node facing IR
@@ -3938,7 +3941,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
     view_factor_setting = df_exp_condition['view_factor_setting']
 
     regression_module = df_exp_condition['regression_module']
-
+    N_simulated_sample_each_cycle = 50
 
     focal_shift = float(df_exp_condition['focal_shift'])
     VDC = float(df_exp_condition['V_DC'])
@@ -4007,7 +4010,7 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
                                     'regression_residual_converging_criteria': df_exp_condition[
                                         'regression_residual_converging_criteria'],'view_factor_setting':df_exp_condition['view_factor_setting'],
                                     'axial_conduction':df_exp_condition['axial_conduction'],
-                                    'analysis_mode':df_exp_condition['analysis_mode'],'N_stable_cycle_output':N_stable_cycle_output}
+                                    'analysis_mode':df_exp_condition['analysis_mode'],'N_stable_cycle_output':N_stable_cycle_output,'N_simulated_sample_each_cycle':N_simulated_sample_each_cycle}
 
     # numerical_simulation_setting
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
