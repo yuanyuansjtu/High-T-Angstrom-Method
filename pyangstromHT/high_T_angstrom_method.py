@@ -1660,8 +1660,7 @@ def finite_difference_explicit_1D_const_cp_alpha(sample_information, vacuum_cham
 
     Fo_criteria = numerical_simulation_setting['Fo_criteria']
 
-    dt = min(Fo_criteria * (dr ** 2) / (alpha_r),
-             1 / f_heating / 15)  # assume 15 samples per period, Fo_criteria default = 1/3
+    dt = Fo_criteria * (dr ** 2) / (alpha_r)  # assume 15 samples per period, Fo_criteria default = 1/3
 
     if f_heating >0:
         t_total = 1 / f_heating * N_cycle  # total simulation time
@@ -2334,7 +2333,7 @@ def radial_finite_difference_explicit(sample_information, vacuum_chamber_setting
                     light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,
                     sigma_df, code_directory, df_view_factor, df_LB_details_all)
 
-    elif (numerical_simulation_setting['analysis_mode'] == 'sensitivity') and (numerical_simulation_setting['analysis_mode'] != 'validation') and (numerical_simulation_setting['regression_parameter'] != 'alpha_r'):
+    elif (numerical_simulation_setting['analysis_mode'] != 'sensitivity') and (numerical_simulation_setting['analysis_mode'] != 'validation') and (numerical_simulation_setting['regression_parameter'] != 'alpha_r'):
         if numerical_simulation_setting['axial_conduction'] == False:
             T, time_simulation, r, N_one_cycle, q_solar = finite_difference_explicit_1D_variable_properties(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,
