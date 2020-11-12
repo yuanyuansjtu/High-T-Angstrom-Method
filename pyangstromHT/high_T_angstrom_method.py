@@ -761,7 +761,7 @@ def radiation_absorption_view_factor_calculations(code_directory,rm_array,dr,sam
 
     if vacuum_chamber_setting['light_blocker'] == True:
 
-        if numerical_simulation_setting['analysis_mode'] != 'sensitivity':
+        if (numerical_simulation_setting['analysis_mode'] != 'sensitivity') and (numerical_simulation_setting['analysis_mode'] != 'validation'):
 
             if sample_name == 'copper':
                 df_LB_temp = df_LB_details_all.query("Material == '{}'".format('copper'))
