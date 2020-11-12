@@ -2334,7 +2334,7 @@ def radial_finite_difference_explicit(sample_information, vacuum_chamber_setting
                     light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,
                     sigma_df, code_directory, df_view_factor, df_LB_details_all)
 
-    elif (numerical_simulation_setting['analysis_mode'] != 'sensitivity') and (numerical_simulation_setting['regression_parameter'] != 'alpha_r'):
+    elif (numerical_simulation_setting['analysis_mode'] == 'sensitivity') and (numerical_simulation_setting['analysis_mode'] != 'validation') and (numerical_simulation_setting['regression_parameter'] != 'alpha_r'):
         if numerical_simulation_setting['axial_conduction'] == False:
             T, time_simulation, r, N_one_cycle, q_solar = finite_difference_explicit_1D_variable_properties(sample_information, vacuum_chamber_setting, solar_simulator_settings,
                        light_source_property, numerical_simulation_setting, df_solar_simulator_VQ,
