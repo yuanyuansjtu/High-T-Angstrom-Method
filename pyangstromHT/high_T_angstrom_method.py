@@ -4679,8 +4679,12 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     absorptivity_back = float(df_exp_condition['absorptivity_back'])
     absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
 
+
+
     Nr = int(df_exp_condition['Nr'])
     N_Rs = int(df_exp_condition['N_Rs'])
+    x0 = int(df_exp_condition['x0'])
+    y0 = int(df_exp_condition['y0'])
 
     alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
     alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
@@ -4751,13 +4755,13 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
 
         return np.array(df_temperature_simulation.iloc[:, :numerical_simulation_setting['Nr']]), np.array(df_amp_phase_simulated['amp_ratio']), np.array(df_amp_phase_simulated['phase_diff'])
 
-    dump_file_path = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}'.format(
+    dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
+        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'])
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
 
-    if (os.path.isfile(dump_file_path)):  # First check if a dump file exist:
-        print('Found previous dump file :' + dump_file_path)
+    if (os.path.isfile(dump_file_path_surrogate)):  # First check if a dump file exist:
+        print('Found previous dump file :' + dump_file_path_surrogate)
         #temp_dump = pickle.load(open(dump_file_path, 'rb'))
     else:
 
@@ -4846,7 +4850,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
             ss_temp_approx = cp.fit_quadrature(polynomials_ss_temp, nodes, weights, temp_steady_list)
 
 
-            pickle.dump((amp_ratio_approx, phase_diff_approx, ss_temp_approx), open(dump_file_path, "wb"))
+            pickle.dump((amp_ratio_approx, phase_diff_approx, ss_temp_approx), open(dump_file_path_surrogate, "wb"))
 
 
 def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
@@ -4863,6 +4867,9 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     absorptivity_back = float(df_exp_condition['absorptivity_back'])
     absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
 
+    x0 = int(df_exp_condition['x0'])
+    y0 = int(df_exp_condition['y0'])
+
     alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
     alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
@@ -4871,12 +4878,12 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
 
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': R0,'focal_shift':focal_shift,'R_analysis':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
 
-    dump_file_path = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}'.format(
+    dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
+        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
 
-    amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path, 'rb'))
+    amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
 
     def physical_model_PC(parameter):
@@ -4973,7 +4980,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
                 log_prior_current = log_prior_new
                 N_accepted_sample += 1
                 accepted_samples.append(parameter)
-                if i_iter % 10 == 0:
+                if i_iter % 100 == 0:
                     print(
                         "At iteration {},The accepted sigma is {:.2e}, alpha_A is {:.2e}, alpha_B is {:.2e}, acceptance rate is {:.2f}.".format(
                             i_iter, parameter[0], parameter[1], parameter[2],
@@ -4995,12 +5002,12 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_sigma_s_{:}_ala_{:}_alb_{:}_N_sample_{:}_Treg_{:}'.format(
+        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(parameter_initial[0]*1000), int(parameter_initial[1]),int(parameter_initial[2]),int(N_total_samples),int(T_regularization*1000))
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(parameter_initial[0]*10000), int(parameter_initial[1]),int(parameter_initial[2]),int(N_total_samples),int(T_regularization*1000),x0,y0)
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
-        print('Found previous dump file :' + dump_file_path_mcmc_results)
+        print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
         accepted_samples_array, f_trace, f_trace_histgram, f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
 
     else:
@@ -5043,7 +5050,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.subplot(133)
     plt.hist(accepted_samples_trim.T[2], bins=30)
     plt.xlabel('alpha_B')
-    f_trace_histgram.suptitle(rec_name)
+    f_trace_histgram.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
     #plt.show()
 
 
@@ -5067,7 +5074,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
 
     plt.xlabel('Temperature (K)')
     plt.ylabel('Thermal diffusivity (m2/s)')
-    f_posterior_mean_vs_reference.suptitle(rec_name)
+    f_posterior_mean_vs_reference.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
 
     plt.legend()
     #plt.show()
@@ -5082,7 +5089,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.subplot(133)
     plt.plot(accepted_samples_trim[:, 2])
     plt.xlabel('alpha_B')
-    f_trace.suptitle(rec_name)
+    f_trace.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
 
     # Now let's run simulations and see how simulated amplitude/phase and temperature profile compares to that of experimental measurements
 
@@ -5135,7 +5142,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.legend()
     plt.ylabel('Temperature (K)')
 
-    f_posterior_vs_experiment.suptitle(rec_name)
+    f_posterior_vs_experiment.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
 
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
@@ -5168,7 +5175,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.xlabel('lags N', fontsize=14, fontweight='bold')
     plt.ylabel('auto corr alpha_B', fontsize=14, fontweight='bold')
 
-    f_auto_corr.suptitle(rec_name)
+    f_auto_corr.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
 
     if (os.path.isfile(dump_file_path_mcmc_results) == False):  # First check if a dump file exist:
         pickle.dump((accepted_samples_array, f_trace,f_trace_histgram,f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr), open(dump_file_path_mcmc_results, "wb"))  # create a dump file
@@ -5571,16 +5578,17 @@ def show_batch_mcmc_results(df_exp_condition_spreadsheet_filename, code_director
         absorptivity_front = float(df_exp_condition['absorptivity_front'])
         absorptivity_back = float(df_exp_condition['absorptivity_back'])
         absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
-
+        x0 = int(df_exp_condition['x0'])
+        y0 = int(df_exp_condition['y0'])
 
         N_Rs = int(df_exp_condition['N_Rs'])
 
-
-        dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + rec_name + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_sigma_s_{:}_ala_{:}_alb_{:}_N_sample_{:}_Treg_{:}'.format(
+        dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
+            'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}'.format(
             int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
             int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,
-            int(parameter_initial[0] * 1000), int(parameter_initial[1]), int(parameter_initial[2]),
-            int(N_total_samples), int(T_regularization * 1000))
+            int(parameter_initial[0] * 10000), int(parameter_initial[1]), int(parameter_initial[2]),
+            int(N_total_samples), int(T_regularization * 1000), x0, y0)
 
         accepted_samples_array, f_trace, f_trace_histgram, f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
 
