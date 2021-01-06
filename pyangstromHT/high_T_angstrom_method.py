@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 
 import operator
 import lmfit
-from lmfit import Parameters
+#from lmfit import Parameters
 import chaospy as cp
 import random
 from lmfit import minimize, Parameters
@@ -5553,7 +5553,8 @@ def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_
 
 def parallel_regression_batch_experimental_results_mcmc(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory,df_sample_cp_rho_alpha,df_amplitude_phase_measurement_list, df_temperature_list, mcmc_setting):
 
-    df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+    #df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     #df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
 
@@ -5564,8 +5565,8 @@ def parallel_regression_batch_experimental_results_mcmc(df_exp_condition_spreads
     #pickle.dump(joblib_output,open(code_directory+"result cache dump//mcmc_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
 def show_batch_mcmc_results(df_exp_condition_spreadsheet_filename, code_directory, mcmc_setting):
-    df_exp_condition_spreadsheet = pd.read_excel(
-        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    #df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
         df_exp_condition = df_exp_condition_spreadsheet.iloc[i,:]
@@ -5609,8 +5610,9 @@ def show_batch_mcmc_results(df_exp_condition_spreadsheet_filename, code_director
 
 
 def parallel_batch_experimental_results_mcmc_implicit_train_surrogate(df_exp_condition_spreadsheet_filename, code_directory,df_temperature_list,df_sample_cp_rho_alpha_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all,mcmc_setting):
-    df_exp_condition_spreadsheet = pd.read_excel(
-        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    # df_exp_condition_spreadsheet = pd.read_excel(
+    #     code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     # df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
