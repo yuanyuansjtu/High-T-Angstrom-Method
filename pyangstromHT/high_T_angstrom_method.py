@@ -5442,8 +5442,8 @@ def parallel_temperature_average_batch_experimental_results_steady_state(df_exp_
 
 
 def parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory):
-    df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
-
+    #df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.read_csv(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     diagnostic_figure_list = []
     df_temperature_list = []
     #df_amplitude_phase_measurement_list = []
