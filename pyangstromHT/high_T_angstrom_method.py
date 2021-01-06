@@ -1732,8 +1732,8 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
 
     R0 = vacuum_chamber_setting['R0']
 
-    alpha_A = float(sample_information['alpha_r_A'])
-    alpha_B = float(sample_information['alpha_r_B'])
+    alpha_r_A = float(sample_information['alpha_r_A'])
+    alpha_r_B = float(sample_information['alpha_r_B'])
 
     T_initial = sample_information['T_initial']  # unit in K
     # k = alpha*rho*cp
@@ -1789,7 +1789,7 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
     for p in tqdm(range(Nt - 1)):  # p indicate time step
 
         c_p_1 = cp_0 + cp_1 * T[p, :] + cp_2 / T[p, :] + cp_3 / T[p, :] ** 2
-        alpha_p_1 = 1 / (alpha_A * T[p, :] + alpha_B)
+        alpha_p_1 = 1 / (alpha_r_A * T[p, :] + alpha_r_B)
         k_p_1 = c_p_1 * alpha_p_1 * rho
 
         for iter in range(Max_iter):
@@ -4650,6 +4650,25 @@ def high_T_Angstrom_execute_one_case(df_exp_condition, data_directory, code_dire
 
 
 
+# Now we train the surrogate model
+def evaluate_PC_node(node_values,code_directory, sample_information,solar_simulator_settings, numerical_simulation_setting,vacuum_chamber_setting,sigma_df,df_solar_simulator_VQ, df_view_factor,df_LB_details_all):
+
+    sigma_s = node_values[0]
+    sample_information['alpha_r_A'] = node_values[1]
+    sample_information['alpha_r_B'] = node_values[2]
+
+    Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sigma_s,
+                                                                          numerical_simulation_setting,
+                                                                          vacuum_chamber_setting)
+
+    light_source_property = {'Amax': Amax, 'sigma_s': sigma_s, 'kvd': kvd, 'bvd': bvd}
+
+    df_amp_phase_simulated, df_temperature_simulation, df_light_source, df_temperature_transient = simulation_result_amplitude_phase_extraction(sample_information,
+                                                                                                                                                vacuum_chamber_setting, solar_simulator_settings,light_source_property, numerical_simulation_setting, code_directory, df_solar_simulator_VQ, sigma_df,df_view_factor, df_LB_details_all)
+
+    return np.array(df_temperature_simulation.iloc[:, :numerical_simulation_setting['Nr']]), np.array(df_amp_phase_simulated['amp_ratio']), np.array(df_amp_phase_simulated['phase_diff'])
+
+
 
 def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all,mcmc_setting):
 
@@ -4686,10 +4705,10 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     x0 = int(df_exp_condition['x0'])
     y0 = int(df_exp_condition['y0'])
 
-    alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
-    alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
-    alpha_z_A = float(df_sample_cp_rho_alpha['alpha_z_A'])
-    alpha_z_B = float(df_sample_cp_rho_alpha['alpha_z_B'])
+    # alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
+    # alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
+    # alpha_z_A = float(df_sample_cp_rho_alpha['alpha_z_A'])
+    # alpha_z_B = float(df_sample_cp_rho_alpha['alpha_z_B'])
 
     N_stable_cycle_output = 2 # by default, we only analyze 2 cycle using sine fitting method
 
@@ -4707,7 +4726,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
                           'emissivity_back': emissivity_back,
                           'absorptivity_back': absorptivity_back,
                           'absorptivity_solar': absorptivity_solar,
-                          'sample_name':sample_name,'alpha_r_A':alpha_r_A,'alpha_r_B':alpha_r_B,'alpha_z_A':alpha_z_A,'alpha_z_B':alpha_z_B,'rec_name': rec_name}
+                          'sample_name':sample_name,'rec_name': rec_name}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
@@ -4734,26 +4753,6 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
                                 'V_DC': VDC}
-
-    # Now we train the surrogate model
-    def evaluate_PC_node(node_values):
-        sigma_s = node_values[0]
-        sample_information['alpha_A'] = node_values[1]
-        sample_information['alpha_B'] = node_values[2]
-
-        Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sigma_s,
-                                                                          numerical_simulation_setting,
-                                                                          vacuum_chamber_setting)
-
-        light_source_property = {'Amax': Amax, 'sigma_s': sigma_s, 'kvd': kvd, 'bvd': bvd}
-
-        df_amp_phase_simulated, df_temperature_simulation, df_light_source, df_temperature_transient = simulation_result_amplitude_phase_extraction(
-            sample_information,
-            vacuum_chamber_setting, solar_simulator_settings,
-            light_source_property, numerical_simulation_setting, code_directory, df_solar_simulator_VQ, sigma_df,
-            df_view_factor, df_LB_details_all)
-
-        return np.array(df_temperature_simulation.iloc[:, :numerical_simulation_setting['Nr']]), np.array(df_amp_phase_simulated['amp_ratio']), np.array(df_amp_phase_simulated['phase_diff'])
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
@@ -4815,16 +4814,22 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
             cp_p_sigmas = cp.Uniform(sigma_s_LL, sigma_s_UL)
             cp_P_AT = cp.Uniform(alpha_A_LL, alpha_A_UL)
             cp_P_BT = cp.Uniform(alpha_B_LL, alpha_B_UL)
-            distribution = cp.J(cp_p_sigmas, cp_P_AT, cp_P_BT)
+            cp_distribution = cp.J(cp_p_sigmas, cp_P_AT, cp_P_BT)
 
             #distribution = cp.J(cp_p_alpha_r)
             order = mcmc_setting['PC_order']
-            nodes, weights = cp.generate_quadrature(order, distribution, rule='Gaussian')
+            nodes, weights = cp.generate_quadrature(order, cp_distribution, rule='Gaussian')
 
             num_cores = mcmc_setting['PC_training_core_num']
 
+            # evaluate_PC_node(node_values, code_directory, sample_information, solar_simulator_settings,
+            #                  numerical_simulation_setting, vacuum_chamber_setting, sigma_df, df_solar_simulator_VQ,
+            #                  df_view_factor, df_LB_details_all)
+
             joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
-                delayed(evaluate_PC_node)(node) for node in
+                delayed(evaluate_PC_node)(node,code_directory,sample_information,solar_simulator_settings,
+                             numerical_simulation_setting, vacuum_chamber_setting, sigma_df, df_solar_simulator_VQ,
+                             df_view_factor, df_LB_details_all) for node in
                 tqdm(nodes.T))
 
             amp_ratio_list = []
@@ -4832,21 +4837,22 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
             temp_steady_list = []
 
             for item in joblib_output:
+                temp_steady_list.append(item[0])
                 amp_ratio_list.append(item[1])
                 phase_diff_list.append(item[2])
-                temp_steady_list.append(item[0])
+
 
             amp_ratio_list = np.array(amp_ratio_list)
             phase_diff_list = np.array(phase_diff_list)
             temp_steady_list = np.array(temp_steady_list)
 
-            polynomials_amp = cp.orth_ttr(order, dist=distribution)
+            polynomials_amp = cp.orth_ttr(order, dist=cp_distribution)
             amp_ratio_approx = cp.fit_quadrature(polynomials_amp, nodes, weights, amp_ratio_list)
 
-            polynomials_phase = cp.orth_ttr(order, dist=distribution)
+            polynomials_phase = cp.orth_ttr(order, dist=cp_distribution)
             phase_diff_approx = cp.fit_quadrature(polynomials_phase, nodes, weights, phase_diff_list)
 
-            polynomials_ss_temp = cp.orth_ttr(order, dist=distribution)
+            polynomials_ss_temp = cp.orth_ttr(order, dist=cp_distribution)
             ss_temp_approx = cp.fit_quadrature(polynomials_ss_temp, nodes, weights, temp_steady_list)
 
 
@@ -4870,8 +4876,8 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     x0 = int(df_exp_condition['x0'])
     y0 = int(df_exp_condition['y0'])
 
-    alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
-    alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
+    alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
+    alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
     N_Rs = int(df_exp_condition['N_Rs'])
 
@@ -4931,9 +4937,9 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
         #     p1 = norm.pdf(parameter[0],1e-2,3e-3)
         #     p2 = norm.pdf(parameter[1],5e-6,2e-6)
         #     p3 = norm.pdf(parameter[2],0.03,0.01)
-        p1 = uniform.pdf(parameter[0], sigma_s_prior_range[0], sigma_s_prior_range[1])
-        p2 = uniform.pdf(parameter[1], alpha_A_prior_range[0], alpha_A_prior_range[1])
-        p3 = uniform.pdf(parameter[2], alpha_B_prior_range[0], alpha_B_prior_range[1])
+        p1 = uniform.pdf(parameter[0], sigma_s_prior_range[0], sigma_s_prior_range[1]-sigma_s_prior_range[0])
+        p2 = uniform.pdf(parameter[1], alpha_A_prior_range[0], alpha_A_prior_range[1]-alpha_A_prior_range[0])
+        p3 = uniform.pdf(parameter[2], alpha_B_prior_range[0], alpha_B_prior_range[1]-alpha_B_prior_range[0])
 
         if p1 * p2 * p3 == 0:
             return -10 ** 9
@@ -5064,7 +5070,7 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
     alpha_T_array_std = alpha_T_array.std(axis=1)
 
-    alpha_reference = 1 / (alpha_r_A * T_array + alpha_r_B)
+    alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
 
     f_posterior_mean_vs_reference = plt.figure(figsize = (7,5))
     plt.fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std, alpha_T_array_mean + 3 * alpha_T_array_std,
@@ -5074,8 +5080,8 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
 
     plt.xlabel('Temperature (K)')
     plt.ylabel('Thermal diffusivity (m2/s)')
-    f_posterior_mean_vs_reference.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
-
+    f_posterior_mean_vs_reference.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
+    #plt.show()
     plt.legend()
     #plt.show()
 
@@ -5089,8 +5095,8 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.subplot(133)
     plt.plot(accepted_samples_trim[:, 2])
     plt.xlabel('alpha_B')
-    f_trace.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
-
+    f_trace.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
+    #plt.show()
     # Now let's run simulations and see how simulated amplitude/phase and temperature profile compares to that of experimental measurements
 
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
@@ -5142,8 +5148,8 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.legend()
     plt.ylabel('Temperature (K)')
 
-    f_posterior_vs_experiment.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
-
+    f_posterior_vs_experiment.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
+    #plt.show()
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
 
@@ -5175,8 +5181,8 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     plt.xlabel('lags N', fontsize=14, fontweight='bold')
     plt.ylabel('auto corr alpha_B', fontsize=14, fontweight='bold')
 
-    f_auto_corr.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis))
-
+    f_auto_corr.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
+    #plt.show()
     if (os.path.isfile(dump_file_path_mcmc_results) == False):  # First check if a dump file exist:
         pickle.dump((accepted_samples_array, f_trace,f_trace_histgram,f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr), open(dump_file_path_mcmc_results, "wb"))  # create a dump file
 
