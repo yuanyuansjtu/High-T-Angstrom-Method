@@ -195,7 +195,7 @@ def check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0, R_
 
 
 def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreadsheet_filename):
-    df_exp_condition_spreadsheet = pd.read_excel(
+    df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
 
     steady_state_figure_list = []
@@ -4716,7 +4716,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
         [2 * np.pi *  m_ *  np.mean(df_temperature.iloc[:, m_]) for m_ in np.arange(R0, R_analysis+R0, 1)]) / (
                         ((R_analysis+R0) ** 2 - (R0) ** 2) * np.pi) # unit in K
 
-    sample_information = {'R': df_exp_condition['sample_radius(m)'], 't_z': df_exp_condition['sample_thickness(m)'],
+    sample_information = {'R': float(df_exp_condition['sample_radius(m)']), 't_z': float(df_exp_condition['sample_thickness(m)']),
                           'rho': float(df_sample_cp_rho_alpha['rho']),
                           'cp_const': float(df_sample_cp_rho_alpha['cp_const']), 'cp_c1':
                               float(df_sample_cp_rho_alpha['cp_c1']), 'cp_c2': float(df_sample_cp_rho_alpha['cp_c2']),
@@ -5005,16 +5005,17 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
     sigma_s_prior_range = mcmc_setting['sigma_s_prior_range']
     alpha_A_prior_range = mcmc_setting['alpha_A_prior_range']
     alpha_B_prior_range = mcmc_setting['alpha_B_prior_range']
+    chain_num = mcmc_setting['chain_num']
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}'.format(
+        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}_chain_{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(parameter_initial[0]*10000), int(parameter_initial[1]),int(parameter_initial[2]),int(N_total_samples),int(T_regularization*1000),x0,y0)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(parameter_initial[0]*10000), int(parameter_initial[1]),int(parameter_initial[2]),int(N_total_samples),int(T_regularization*1000),x0,y0,chain_num)
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
-        accepted_samples_array, f_trace, f_trace_histgram, f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
+        accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
 
     else:
         accepted_samples = rw_Metropolis_Hasting(parameter_initial, step, df_amplitude_phase_measurement,
@@ -5022,241 +5023,10 @@ def high_T_Angstrom_execute_one_case_mcmc(df_exp_condition, data_directory, code
                                                  N_total_samples,sigma_s_prior_range,alpha_A_prior_range,alpha_B_prior_range)
         accepted_samples_array = np.array(accepted_samples)
 
-    #accepted_samples = rw_Metropolis_Hasting(p_initial, step, df_amplitude_phase_measurement, N_total_samples)
-
     print("recording {} completed.".format(rec_name))
 
-    # if numerical_simulation_setting['regression_parameter'] == 'sigma_s' and numerical_simulation_setting[
-    #     'analysis_mode'] == 'mcmc':
-    #     accepted_samples_array = np.array(accepted_samples)
-    #     sigma_s_posterior = accepted_samples_array[500:].mean()
-    #     Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sigma_s_posterior,
-    #                                                                   numerical_simulation_setting,
-    #                                                                   vacuum_chamber_setting)
-    #     Amax_light_source = Amax
-    #
-    # elif numerical_simulation_setting['regression_parameter'] == 'alpha_r' and numerical_simulation_setting[
-    #     'analysis_mode'] == 'mcmc':
-    #     accepted_samples_array = np.array(accepted_samples)
-    #     alpha_r_posterior = accepted_samples_array[500:].mean()
-    #     Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, None,
-    #                                                                   numerical_simulation_setting,
-    #                                                                   vacuum_chamber_setting)
-    #     Amax_light_source = Amax
-
-    accepted_samples_trim = accepted_samples_array[500:]
-
-    f_trace_histgram = plt.figure(figsize=(24, 6))
-    plt.subplot(131)
-    plt.hist(accepted_samples_trim.T[0], bins=30)
-    plt.xlabel('sigma_s')
-    plt.subplot(132)
-    plt.hist(accepted_samples_trim.T[1], bins=30)
-    plt.xlabel('alpha_A')
-    plt.subplot(133)
-    plt.hist(accepted_samples_trim.T[2], bins=30)
-    plt.xlabel('alpha_B')
-    f_trace_histgram.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
-    #plt.show()
-
-
-    T_array = np.linspace(df_temperature.iloc[:, R0+R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 50)
-    alpha_T_array = np.zeros((len(T_array), len(accepted_samples_trim)))
-
-    for i in range(len(accepted_samples_trim)):
-        # alpha_T_array[:,i] = 1/(accepted_samples_trim[i][1]*T_array+accepted_samples_trim[i][2])
-        alpha_T_array[:, i] = 1 / (accepted_samples_trim[i][1] * T_array + accepted_samples_trim[i][2])
-
-    alpha_T_array_mean = alpha_T_array.mean(axis=1)
-    alpha_T_array_std = alpha_T_array.std(axis=1)
-
-    alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
-
-    f_posterior_mean_vs_reference = plt.figure(figsize = (7,5))
-    plt.fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std, alpha_T_array_mean + 3 * alpha_T_array_std,
-                     alpha=0.2)
-    plt.plot(T_array, alpha_T_array_mean, color='k', label='mcmc mean')
-    plt.plot(T_array, alpha_reference, color='r', label='reference')
-
-    plt.xlabel('Temperature (K)')
-    plt.ylabel('Thermal diffusivity (m2/s)')
-    f_posterior_mean_vs_reference.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
-    #plt.show()
-    plt.legend()
-    #plt.show()
-
-    f_trace = plt.figure(figsize=(24, 6))
-    plt.subplot(131)
-    plt.plot(accepted_samples_trim[:, 0])
-    plt.xlabel('sigma_s')
-    plt.subplot(132)
-    plt.plot(accepted_samples_trim[:, 1])
-    plt.xlabel('alpha_A')
-    plt.subplot(133)
-    plt.plot(accepted_samples_trim[:, 2])
-    plt.xlabel('alpha_B')
-    f_trace.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
-    #plt.show()
-    # Now let's run simulations and see how simulated amplitude/phase and temperature profile compares to that of experimental measurements
-
-    alpha_T_array_mean = alpha_T_array.mean(axis=1)
-
-    def residual(params, x, data):
-        alpha_A = params['alpha_A']
-        alpha_B = params['alpha_B']
-
-        model = 1 / (alpha_A * x + alpha_B)
-
-        return model - data
-
-    params = Parameters()
-    params.add('alpha_A', value=1e-7)
-    params.add('alpha_B', value=2e-2)
-
-    out = minimize(residual, params, args=(T_array, alpha_T_array_mean))
-
-    print('Fitted alpha_A = {:.2e} and alpha_B = {:.2e}.'.format(out.params['alpha_A'].value,
-                                                                 out.params['alpha_B'].value))
-    alpha_A_posterior_mean = out.params['alpha_A'].value
-    alpha_B_posterior_mean = out.params['alpha_B'].value
-
-    sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
-
-    #amp_ratio_approx, phase_diff_approx, ss_temp_approx
-
-    f_posterior_vs_experiment = plt.figure(figsize=(24, 6))
-
-    plt.subplot(131)
-    plt.plot(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['amp_ratio'],label = 'measurement')
-    plt.scatter(df_amplitude_phase_measurement['r'], amp_ratio_approx(sigma_s_posterior_mean,alpha_A_posterior_mean,alpha_B_posterior_mean),label = 'simulated')
-    plt.xlabel('R (node num)')
-    plt.ylabel('Amplitude ratio')
-    plt.legend()
-
-    plt.subplot(132)
-    plt.plot(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['phase_diff'],label = 'measurement')
-    plt.scatter(df_amplitude_phase_measurement['r'], phase_diff_approx(sigma_s_posterior_mean,alpha_A_posterior_mean,alpha_B_posterior_mean),label = 'simulated')
-    plt.xlabel('R (node num)')
-    plt.ylabel('Phase difference')
-    plt.legend()
-
-    plt.subplot(133)
-    plt.plot(ss_temp_approx(sigma_s_posterior_mean,alpha_A_posterior_mean,alpha_B_posterior_mean)[:,R0], label='simulated R = {:}'.format(R0))
-    plt.plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
-    plt.plot(ss_temp_approx(sigma_s_posterior_mean,alpha_A_posterior_mean,alpha_B_posterior_mean)[:, R0+R_analysis], label='simulated R = {:}'.format(R0+R_analysis))
-    plt.plot(df_temperature.iloc[:, R0+R_analysis], label='measured R = {:}'.format(R0+R_analysis))
-    plt.legend()
-    plt.ylabel('Temperature (K)')
-
-    f_posterior_vs_experiment.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
-    #plt.show()
-    def acf(x, length):
-        return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
-
-    def auto_correlation_function(trace, lags):
-        autocorr_trace = acf(trace, lags)
-        return autocorr_trace
-
-    #def plot_auto_correlation(trace, lags):
-
-    lags = 100
-
-    f_auto_corr = plt.figure(figsize=(24, 6))
-        # f = plt.figure()
-    plt.subplot(131)
-    autocorr_trace = auto_correlation_function(accepted_samples_trim[:, 0], lags)
-    plt.plot(autocorr_trace)
-    plt.xlabel('lags N', fontsize=14, fontweight='bold')
-    plt.ylabel('auto corr sigma_s', fontsize=14, fontweight='bold')
-
-    plt.subplot(132)
-    autocorr_trace = auto_correlation_function(accepted_samples_trim[:, 1], lags)
-    plt.plot(autocorr_trace)
-    plt.xlabel('lags N', fontsize=14, fontweight='bold')
-    plt.ylabel('auto corr alpha_A', fontsize=14, fontweight='bold')
-
-    plt.subplot(133)
-    autocorr_trace = auto_correlation_function(accepted_samples_trim[:, 2], lags)
-    plt.plot(autocorr_trace)
-    plt.xlabel('lags N', fontsize=14, fontweight='bold')
-    plt.ylabel('auto corr alpha_B', fontsize=14, fontweight='bold')
-
-    f_auto_corr.suptitle("{},f_heating = {:.2e},R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),R0,R_analysis,x0,y0))
-    #plt.show()
     if (os.path.isfile(dump_file_path_mcmc_results) == False):  # First check if a dump file exist:
-        pickle.dump((accepted_samples_array, f_trace,f_trace_histgram,f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr), open(dump_file_path_mcmc_results, "wb"))  # create a dump file
-
-
-
-#
-# def log_likelihood(parameter, df_amp_phase_measurement,df_temperature_measurement,T_regularization,vacuum_chamber_setting):
-#     simulation_A, simulation_P, simulation_SS_T = physical_model_PC(parameter)
-#     observation_A = np.array(df_amp_phase_measurement['amp_ratio'])
-#     observation_P = np.array(df_amp_phase_measurement['phase_diff'])
-#     sigma_noise_A = np.array(df_amp_phase_measurement['dA'])
-#     sigma_noise_P = np.array(df_amp_phase_measurement['dP'])
-#
-#     R0 = vacuum_chamber_setting['R0']
-#     R_analysis = vacuum_chamber_setting['R_analysis']
-#
-#     p_A = norm.pdf(simulation_A, observation_A, sigma_noise_A)
-#     p_P = norm.pdf(simulation_P, observation_P, sigma_noise_P)
-#         # p_T = T_regularization*(SS_T[:,R0:R0+R_analysis].mean(axis = 0) - np.array(df_temperature_measurement.iloc[:,R0:R0+R_analysis]))**2
-#
-#     p_T = T_regularization * np.sum((simulation_SS_T[:, R0:R0 + 1].mean(axis=0) - np.array(
-#             df_temperature_measurement.iloc[:, R0:R0 + 1].mean(axis=0))) ** 2)
-#
-#     for i in range(len(p_A)):
-#         if p_A[i] < 10 ** (-256):
-#             p_A[i] = 10 ** (-256)  # avoid getting zero for log
-#                 # print("Warning! A")
-#         if p_P[i] < 10 ** (-256):
-#             p_P[i] = 10 ** (-256)  # avoid getting zero for log
-#
-#     if df_exp_condition['regression_method'] == 0:
-#         return np.sum(np.log(p_A)) + np.sum(np.log(p_P)) - p_T  # calculate the sum of the natural log probability
-#     elif df_exp_condition['regression_method'] == 1:
-#         return np.sum(np.log(p_A)) + p_T
-#     elif df_exp_condition['regression_method'] == 2:
-#         return np.sum(np.log(p_P)) + p_T
-#
-#
-#
-# def acceptance(log_likelihood_current, log_likelihood_new):
-#     C = random.uniform(0, 1)
-#     A = min(np.exp(log_likelihood_new - log_likelihood_current), 1)
-#     if C <= A:
-#         return True  # accept tht proposal, move on
-#     else:
-#         return False  # reject the proposal, say at current
-#
-#
-# def rw_Metropolis_Hasting(parameter_initial, step, df_observation, N_total_samples):
-#     parameter = parameter_initial
-#     log_likelihood_current = log_likelihood(parameter, df_observation)
-#     N_accepted_sample = 0
-#     N_rejected_sample = 0
-#     accepted_samples = []
-#     while (N_accepted_sample < N_total_samples):
-#         i_iter = N_rejected_sample + N_accepted_sample
-#
-#         parameter_new = np.array([norm.rvs(parameter, step)])
-#         log_likelihood_new = log_likelihood(parameter_new, df_observation)
-#
-#         if acceptance(log_likelihood_current, log_likelihood_new):
-#             parameter = parameter_new
-#             log_likelihood_current = log_likelihood_new
-#             N_accepted_sample += 1
-#             accepted_samples.append(parameter)
-#             print("The accepted alphar is {:.2e}, acceptance rate is {:.2f}.".format(parameter[0], N_accepted_sample / (
-#                         N_accepted_sample + N_rejected_sample)))
-#
-#         else:
-#             N_rejected_sample += 1
-#
-#         if i_iter % 1000 == 0:
-#             print("Iteration {}!".format(i_iter))
-#     return accepted_samples
+        pickle.dump(accepted_samples_array, open(dump_file_path_mcmc_results, "wb"))  # create a dump file
 
 
 
@@ -5380,7 +5150,7 @@ def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path,
 
 def parallel_temperature_average_batch_experimental_results_steady_state(df_exp_condition_spreadsheet_filename,
                                                                          data_directory, num_cores, code_directory):
-    df_exp_condition_spreadsheet = pd.read_excel(
+    df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
 
     steady_state_figure_list = []
@@ -5541,7 +5311,7 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
 
 
 def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory,df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all):
-    df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+    df_exp_condition_spreadsheet = pd.csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
 
@@ -5564,48 +5334,174 @@ def parallel_regression_batch_experimental_results_mcmc(df_exp_condition_spreads
 
     #pickle.dump(joblib_output,open(code_directory+"result cache dump//mcmc_results_" + df_exp_condition_spreadsheet_filename, "wb"))
 
-def show_batch_mcmc_results(df_exp_condition_spreadsheet_filename, code_directory, mcmc_setting):
+def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,df_amplitude_phase_measurement, df_sample_cp_rho_alpha, mcmc_setting):
     #df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    #df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+    parameter_initial = mcmc_setting['p_initial']
+    N_total_samples = mcmc_setting['N_total_mcmc_samples']
+    T_regularization = mcmc_setting['T_regularization']
+    chain_num = mcmc_setting['chain_num']
+
+    rec_name = df_exp_condition['rec_name']
+    R0 = int(df_exp_condition['R0'])
+    R_analysis = int(df_exp_condition['R_analysis'])
+    gap = int(df_exp_condition['gap'])
+    emissivity_front = float(df_exp_condition['emissivity_front'])
+    emissivity_back = float(df_exp_condition['emissivity_back'])
+    absorptivity_front = float(df_exp_condition['absorptivity_front'])
+    absorptivity_back = float(df_exp_condition['absorptivity_back'])
+    absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
+    x0 = int(df_exp_condition['x0'])
+    y0 = int(df_exp_condition['y0'])
+
+    N_Rs = int(df_exp_condition['N_Rs'])
+    
+    alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
+
+    alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
+
+    dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
+        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}_chain_{:}'.format(
+        int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,
+        int(parameter_initial[0] * 10000), int(parameter_initial[1]), int(parameter_initial[2]),
+        int(N_total_samples), int(T_regularization * 1000), x0, y0, chain_num)
+
+    accepted_samples_array =  pickle.load(open(dump_file_path_mcmc_results, 'rb'))
+
+    accepted_samples_trim = accepted_samples_array[500:]
+
+    f,axes = plt.subplots(4,3,figsize = (26,24))
+    axes[0,0].hist(accepted_samples_trim.T[0], bins=30)
+    axes[0,0].set_xlabel('sigma_s',fontsize = 14)
+
+    axes[0,1].hist(accepted_samples_trim.T[1], bins=30)
+    axes[0,1].set_xlabel('alpha_A',fontsize = 14)
+
+    axes[0,2].hist(accepted_samples_trim.T[2], bins=30)
+    axes[0,2].set_xlabel('alpha_B',fontsize = 14)
+
+    axes[1,0].plot(accepted_samples_trim[:, 0])
+    axes[1,0].set_ylabel('sigma_s',fontsize = 14)
+    axes[1,0].set_xlabel('sample num', fontsize=14)
+
+    axes[1, 1].plot(accepted_samples_trim[:, 1])
+    axes[1, 1].set_ylabel('alpha_A',fontsize = 14)
+    axes[1, 1].set_xlabel('sample num', fontsize=14)
+
+    axes[1, 2].plot(accepted_samples_trim[:, 2])
+    axes[1, 2].set_ylabel('alpha_B',fontsize = 14)
+    axes[1, 2].set_xlabel('sample num', fontsize=14)
+
+
+
+    T_array = np.linspace(df_temperature.iloc[:, R0 + R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 50)
+    alpha_T_array = np.zeros((len(T_array), len(accepted_samples_trim)))
+
+    for i in range(len(accepted_samples_trim)):
+        # alpha_T_array[:,i] = 1/(accepted_samples_trim[i][1]*T_array+accepted_samples_trim[i][2])
+        alpha_T_array[:, i] = 1 / (accepted_samples_trim[i][1] * T_array + accepted_samples_trim[i][2])
+
+    alpha_T_array_mean = alpha_T_array.mean(axis=1)
+    alpha_T_array_std = alpha_T_array.std(axis=1)
+
+    alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
+
+    f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
+    axes[2,0].fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std,
+                     alpha_T_array_mean + 3 * alpha_T_array_std,
+                     alpha=0.2)
+    axes[2,0].plot(T_array, alpha_T_array_mean, color='k', label='mcmc mean')
+    axes[2,0].plot(T_array, alpha_reference, color='r', label='reference')
+
+    axes[2,0].set_xlabel('Temperature (K)')
+    axes[2,0].set_ylabel('Thermal diffusivity (m2/s)')
+
+
+    alpha_T_array_mean = alpha_T_array.mean(axis=1)
+
+    def residual(params, x, data):
+        alpha_A = params['alpha_A']
+        alpha_B = params['alpha_B']
+
+        model = 1 / (alpha_A * x + alpha_B)
+
+        return model - data
+
+    params = Parameters()
+    params.add('alpha_A', value=1e-7)
+    params.add('alpha_B', value=2e-2)
+
+    out = minimize(residual, params, args=(T_array, alpha_T_array_mean))
+
+    alpha_A_posterior_mean = out.params['alpha_A'].value
+    alpha_B_posterior_mean = out.params['alpha_B'].value
+
+    sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
+
+    dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
+        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
+        int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
+
+    amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
+
+    axes[2, 1].plot(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['amp_ratio'], label='measurement')
+    axes[2, 1].scatter(df_amplitude_phase_measurement['r'], amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean), label='simulated')
+    axes[2, 1].set_xlabel('R (node num)')
+    axes[2, 1].set_ylabel('Amplitude ratio')
+    axes[2, 1].legend()
+
+
+    axes[2, 2].plot(df_amplitude_phase_measurement['r'], df_amplitude_phase_measurement['phase_diff'], label='measurement')
+    axes[2, 2].scatter(df_amplitude_phase_measurement['r'], phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean), label='simulated')
+    axes[2, 2].set_xlabel('R (node num)')
+    axes[2, 2].set_ylabel('Phase difference')
+    axes[2, 2].legend()
+
+
+    axes[3, 0].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0],
+             label='simulated R = {:}'.format(R0))
+    axes[3, 0].plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
+    axes[3, 0].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0+R_analysis],
+             label='simulated R = {:}'.format(R0+R_analysis))
+    axes[3, 0].plot(df_temperature.iloc[:, R0+R_analysis], label='measured R = {:}'.format(R0+R_analysis))
+    axes[3, 0].set_ylabel('Temperature (K)')
+    axes[3, 0].legend()
+
+    def acf(x, length):
+        return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
+
+    def auto_correlation_function(trace, lags):
+        autocorr_trace = acf(trace, lags)
+        return autocorr_trace
+
+    # def plot_auto_correlation(trace, lags):
+
+    lags = 100
+
+    autocorr_trace_alpha_A = auto_correlation_function(accepted_samples_trim[:, 1], lags)
+    axes[3, 1].plot(autocorr_trace_alpha_A)
+    axes[3, 1].set_xlabel('lags N', fontsize=14)
+    axes[3, 1].set_ylabel('alpha_A', fontsize=14)
+
+    autocorr_trace_alpha_B = auto_correlation_function(accepted_samples_trim[:, 2], lags)
+    axes[3, 2].plot(autocorr_trace_alpha_B)
+    axes[3, 2].set_xlabel('lags N', fontsize=14)
+    axes[3, 2].set_ylabel('alpha_B', fontsize=14)
+
+    f.suptitle("{},f_heating = {:.2e}, VDC = {}, R0 = {}, R_a = {}, x0 = {}, y0 = {}".format(rec_name,float(df_exp_condition['f_heating']),float(df_exp_condition['V_DC']),R0,R_analysis,x0,y0),y=0.91,fontsize = 16)
+    #plt.show()
+
+    #print("------------------------------------Happy 2021!------------------------------------")
+    print(rec_name + " is shown here, and with mean sigma_s = {:.2e}, alpha_A = {:.2e}, alpha_B = {:.2e}".format(accepted_samples_array.T[0].mean(),accepted_samples_array.T[1].mean(),accepted_samples_array.T[2].mean()))
+    #return f
+
+def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code_directory,df_temperature_list, df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha,mcmc_setting):
     df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
-
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
-        df_exp_condition = df_exp_condition_spreadsheet.iloc[i,:]
-        #step = mcmc_setting['step_size']
-        parameter_initial = mcmc_setting['p_initial']
-        N_total_samples = mcmc_setting['N_total_mcmc_samples']
-        T_regularization = mcmc_setting['T_regularization']
-
-
-        rec_name = df_exp_condition['rec_name']
-        R0 = int(df_exp_condition['R0'])
-        R_analysis = int(df_exp_condition['R_analysis'])
-        gap = int(df_exp_condition['gap'])
-        emissivity_front = float(df_exp_condition['emissivity_front'])
-        emissivity_back = float(df_exp_condition['emissivity_back'])
-        absorptivity_front = float(df_exp_condition['absorptivity_front'])
-        absorptivity_back = float(df_exp_condition['absorptivity_back'])
-        absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
-        x0 = int(df_exp_condition['x0'])
-        y0 = int(df_exp_condition['y0'])
-
-        N_Rs = int(df_exp_condition['N_Rs'])
-
-        dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-            'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_ss{:}_ala{:}_alb{:}_Num{:}_Tr{:}_x0{:}_y0{:}'.format(
-            int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-            int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,
-            int(parameter_initial[0] * 10000), int(parameter_initial[1]), int(parameter_initial[2]),
-            int(N_total_samples), int(T_regularization * 1000), x0, y0)
-
-        accepted_samples_array, f_trace, f_trace_histgram, f_posterior_mean_vs_reference, f_posterior_vs_experiment, f_auto_corr = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
-
-        print("------------------------------------Happy 2021!------------------------------------")
-        print(rec_name + " is shown here, and with mean sigma_s = {:.2e}, alpha_A = {:.2e}, alpha_B = {:.2e}".format(accepted_samples_array.T[0].mean(),accepted_samples_array.T[1].mean(),accepted_samples_array.T[2].mean()))
-        # display(f_trace)
-        # display(f_trace_histgram)
-        # display(f_posterior_mean_vs_reference)
-        # display(f_posterior_vs_experiment)
-        # display(f_auto_corr)
+        show_mcmc_results_one_case(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
+                                                              df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
 
 
 
@@ -5857,7 +5753,7 @@ def calculate_total_absorption(R_sample, pr, absorptivity_front, absorptivity_ba
 
 def batch_process_steady_state_emission_spread_sheet(data_directory, code_directory,
                                                      df_exp_condition_spreadsheet_filename, num_cores):
-    df_exp_condition_spreadsheet = pd.read_excel(
+    df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     emission_list = []
     surr_absorption_list = []
