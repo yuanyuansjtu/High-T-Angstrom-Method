@@ -2651,13 +2651,15 @@ def parallel_result_visualization(df_exp_condition_spreadsheet_filename, df_resu
                      "wb"))
 
 
-def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory, code_directory, df_amplitude_phase_measurement,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all):
+def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory, code_directory, df_amplitude_phase_measurement,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor):
 
 
     sample_name = df_exp_condition['sample_name']
     #df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
 
     # this function read a row from an excel spread sheet and execute
+    LB_file_name = df_exp_condition['LB_file_name']
+    df_LB_details_all = pd.read_csv(code_directory+"sample specifications//"+ LB_file_name+ ".csv")
 
     rec_name = df_exp_condition['rec_name']
 
@@ -2740,7 +2742,7 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
 
         params = Parameters()
         params.add('alpha_r_A', value=float(df_exp_condition['alpha_r_A_initial']), min=0.5,max = 100)
-        params.add('alpha_r_B', value=float(df_exp_condition['alpha_r_B_initial']), min=0, max = 20000)
+        params.add('alpha_r_B', value=float(df_exp_condition['alpha_r_B_initial']), min=-1000, max = 20000)
         params.add('sigma_s', value=float(df_exp_condition['sigma_s_initial']), min=4e-3,max = 18e-3)
 
         out = lmfit.minimize(residual_update, params,
@@ -2800,13 +2802,13 @@ def residual_update(params, df_amplitude_phase_measurement, sample_information, 
 def parallel_regression_batch_experimental_results_regression(df_exp_condition_spreadsheet_filename, data_directory,
                                                         num_cores, code_directory, df_sample_cp_rho_alpha,
                                                         df_amplitude_phase_measurement_list, df_temperature_list,
-                                                        df_solar_simulator_VQ,sigma_df, df_view_factor,df_LB_details_all):
+                                                        df_solar_simulator_VQ,sigma_df, df_view_factor):
     # df_exp_condition_spreadsheet = pd.read_excel(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
     df_exp_condition_spreadsheet = pd.read_csv(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
 
     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(delayed(high_T_Angstrom_execute_one_case_regression)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,
                                                                                                                code_directory, df_amplitude_phase_measurement_list[i], df_temperature_list[i],
-                                                                                                               df_sample_cp_rho_alpha, df_solar_simulator_VQ, sigma_df, df_view_factor, df_LB_details_all) for i in tqdm(range(len(df_exp_condition_spreadsheet))))
+                                                                                                               df_sample_cp_rho_alpha, df_solar_simulator_VQ, sigma_df, df_view_factor) for i in tqdm(range(len(df_exp_condition_spreadsheet))))
 
     return joblib_output
 
@@ -2834,18 +2836,20 @@ def evaluate_PC_node(node_values,code_directory, sample_information,solar_simula
 
 
 
-def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all,mcmc_setting):
+def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_setting):
 
 
     sample_name = df_exp_condition['sample_name']
-    df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
+    LB_file_name = df_exp_condition['LB_file_name']
+    df_LB_details_all = pd.read_csv(code_directory+"sample specifications//"+ LB_file_name+ ".csv")
+    #df_sample_cp_rho_alpha = df_sample_cp_rho_alpha_all.query("sample_name=='{}'".format(sample_name))
 
     # this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
     #view_factor_setting = df_exp_condition['view_factor_setting']
 
-    regression_module = df_exp_condition['regression_module']
+    #regression_module = df_exp_condition['regression_module']
     N_sample_to_keep_each_cycle = 50
 
     focal_shift = float(df_exp_condition['focal_shift'])
@@ -2917,9 +2921,13 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
                                 'V_DC': VDC}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     if (os.path.isfile(dump_file_path_surrogate)):  # First check if a dump file exist:
         print('Found previous dump file :' + dump_file_path_surrogate)
@@ -2928,39 +2936,9 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
 
         if numerical_simulation_setting['regression_parameter'] == 'sigma_s' and numerical_simulation_setting['analysis_mode'] == 'mcmc':
             pass # This code needs further development
-            # sigma_s_LL = mcmc_setting['parameter_prior_range'][0][0] #lower limit for sigma
-            # sigma_s_UL = mcmc_setting['parameter_prior_range'][0][1] #upper limit for sigma
-            # cp_p_sigma_s = cp.Uniform(sigma_s_LL, sigma_s_UL)
-            # distribution = cp.J(cp_p_sigma_s)
-            #
-            # order = mcmc_setting['PC_order']
-            # nodes, weights = cp.generate_quadrature(order, distribution, rule='Gaussian')
-            #
-            # amplitude_ratio_samples = []
-            # phase_diff_samples = []
-            # for node in nodes.T:
-            #
-            #     Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, node[0],
-            #                                                                       numerical_simulation_setting,
-            #                                                                       vacuum_chamber_setting)
-            #     light_source_property = {'Amax': Amax, 'sigma_s': sigma_s, 'kvd': kvd, 'bvd': bvd}
-            #
-            #     df_amp_phase_simulated_, df_temperature_simulation_, df_light_source_, df_temperature_transient_ = simulation_result_amplitude_phase_extraction(
-            #         sample_information,
-            #         vacuum_chamber_setting, solar_simulator_settings,
-            #         light_source_property, numerical_simulation_setting, code_directory, df_solar_simulator_VQ, sigma_df,
-            #         df_view_factor, df_LB_details_all)
-            #
-            #     amplitude_ratio_samples.append(df_amp_phase_simulated_['amp_ratio'])
-            #     phase_diff_samples.append(df_amp_phase_simulated_['phase_diff'])
-            #
-            # # Now train the polynomial chaos
-            # polynomials = cp.orth_ttr(order, dist=distribution)
-            # amp_ratio_approx = cp.fit_quadrature(polynomials, nodes, weights, amplitude_ratio_samples)
-            # phase_diff_approx = cp.fit_quadrature(polynomials, nodes, weights, phase_diff_samples)
 
 
-        elif numerical_simulation_setting['regression_parameter'] == 'alpha_r' and numerical_simulation_setting['analysis_mode'] == 'mcmc':
+        elif numerical_simulation_setting['regression_parameter'] == 'alpha_r' and (numerical_simulation_setting['analysis_mode'] == 'NUTs' or numerical_simulation_setting['analysis_mode'] == 'RW_Metropolis'):
 
             # Note alpha = 1/(alpha_A * T + alpha_B)
             alpha_A_LL = mcmc_setting['alpha_A_prior_range'][0] #lower limit for alpha_A
@@ -3240,7 +3218,7 @@ class LogLikeGrad(tt.Op):
 def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
-
+    LB_file_name = df_exp_condition['LB_file_name']
     rec_name = df_exp_condition['rec_name']
     R0 = int(df_exp_condition['R0'])
     R_analysis  = int(df_exp_condition['R_analysis'])
@@ -3254,8 +3232,8 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     x0 = int(df_exp_condition['x0'])
     y0 = int(df_exp_condition['y0'])
 
-    alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
-    alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
+    #alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
+    #alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
     N_Rs = int(df_exp_condition['N_Rs'])
     mcmc_mode = df_exp_condition['analysis_mode']
@@ -3263,9 +3241,13 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': R0,'focal_shift':focal_shift,'R_analysis':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -3312,10 +3294,14 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     chain_num = mcmc_setting['chain_num']
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_Num{:}_Tr{:}_x0{:}_y0{:}_MC_{:}_chain_{:}'.format(
+        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(N_total_samples),int(T_regularization*1000),x0,y0,mcmc_mode,chain_num)
-
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
+        x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -3354,6 +3340,7 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
 def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
+    LB_file_name = df_exp_condition['LB_file_name']
 
     rec_name = df_exp_condition['rec_name']
     R0 = int(df_exp_condition['R0'])
@@ -3369,8 +3356,8 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     x0 = int(df_exp_condition['x0'])
     y0 = int(df_exp_condition['y0'])
 
-    alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
-    alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
+    #alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
+    #alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
     N_Rs = int(df_exp_condition['N_Rs'])
 
@@ -3378,9 +3365,13 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     vacuum_chamber_setting = {'N_Rs': int(df_exp_condition['N_Rs']), 'R0': R0,'focal_shift':focal_shift,'R_analysis':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,mcmc_setting['PC_order'],x0,y0)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -3502,9 +3493,14 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_Num{:}_Tr{:}_x0{:}_y0{:}_MC_{:}_chain_{:}'.format(
+        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(N_total_samples),int(T_regularization*1000),x0,y0,mcmc_mode,chain_num)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
+        x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -3540,6 +3536,8 @@ def parallel_regression_batch_experimental_results_mcmc(df_exp_condition_spreads
                                                               df_amplitude_phase_measurement_list[i],
                                                               df_temperature_list[i], mcmc_setting) for i in
             tqdm(range(len(df_exp_condition_spreadsheet))))
+
+
     elif mcmc_mode == 'NUTs':
         Parallel(n_jobs=num_cores, verbose=0)(
             delayed(high_T_Angstrom_execute_one_case_NUTs)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,
@@ -3556,6 +3554,8 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     # df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
     parameter_initial = mcmc_setting['p_initial']
+    LB_file_name = df_exp_condition['LB_file_name']
+
     N_total_samples = mcmc_setting['N_total_mcmc_samples']
     T_regularization = mcmc_setting['T_regularization']
     chain_num = mcmc_setting['chain_num']
@@ -3581,10 +3581,14 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     mcmc_mode = df_exp_condition['analysis_mode']
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}_R_a{:}_gp{:}_ef{:}_eb{:}_af{:}_ab{:}_as{:}_NRs{:}_Num{:}_Tr{:}_x0{:}_y0{:}_MC_{:}_chain_{:}'.format(
+        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,int(N_total_samples),int(T_regularization*1000),x0,y0,mcmc_mode,chain_num)
-
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
+        x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
 
@@ -3656,10 +3660,13 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0_{:}_R_analysis_{:}_gap_{:}_ef_{:}_eb_{:}_af_{:}_ab_{:}_as_{:}_N_Rs_{:}_order_{:}_x0_{:}_y0_{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
-        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100), N_Rs,
-        mcmc_setting['PC_order'], x0, y0)
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs,mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
+        int(mcmc_setting['alpha_B_prior_range'][1]/100))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -3712,29 +3719,8 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     axes[3, 2].set_xlabel('lags N', fontsize=14)
     axes[3, 2].set_ylabel('alpha_B', fontsize=14)
 
-    f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,
-                                                                                                             float(
-                                                                                                                 df_exp_condition[
-                                                                                                                     'f_heating']),
-                                                                                                             float(
-                                                                                                                 df_exp_condition[
-                                                                                                                     'V_DC']),
-                                                                                                             R0,
-                                                                                                             R_analysis,
-                                                                                                             int(
-                                                                                                                 100 * float(
-                                                                                                                     df_exp_condition[
-                                                                                                                         'emissivity_front'])),
-                                                                                                             int(
-                                                                                                                 100 * float(
-                                                                                                                     df_exp_condition[
-                                                                                                                         'emissivity_back'])),
-                                                                                                             int(
-                                                                                                                 100 * float(
-                                                                                                                     df_exp_condition[
-                                                                                                                         'absorptivity_solar'])),
-                                                                                                             x0, y0),
-               y=0.91, fontsize=16)
+    f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,float(df_exp_condition['f_heating']),float(df_exp_condition['V_DC']),R0,R_analysis,int(100 * float(df_exp_condition['emissivity_front'])),
+                                                                                                             int(100 * float( df_exp_condition['emissivity_back'])), int(100 * float(df_exp_condition['absorptivity_solar'])),x0, y0),y=0.91, fontsize=16)
     # plt.show()
 
     # print("------------------------------------Happy 2021!------------------------------------")
@@ -4030,31 +4016,30 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
 
     return df_temperature_list, df_amplitude_phase_measurement_averaged_list
 
+#
+# def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory,df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all):
+#     df_exp_condition_spreadsheet = pd.csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+#
+#     df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
+#
+#     joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
+#         delayed(high_T_Angstrom_execute_one_case)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,code_directory, df_amplitude_phase_measurement_list[i], df_temperature_list[i],df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all) for i in
+#         tqdm(range(len(df_exp_condition_spreadsheet))))
+#
+#     pickle.dump(joblib_output,open(code_directory+"result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
+#
 
-def parallel_regression_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory,df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all):
-    df_exp_condition_spreadsheet = pd.csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
-    df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
+def parallel_batch_experimental_results_mcmc_implicit_train_surrogate(df_exp_condition_spreadsheet_filename, code_directory,df_temperature_list,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_setting):
 
-    joblib_output = Parallel(n_jobs=num_cores, verbose=0)(
-        delayed(high_T_Angstrom_execute_one_case)(df_exp_condition_spreadsheet.iloc[i, :], data_directory,code_directory, df_amplitude_phase_measurement_list[i], df_temperature_list[i],df_sample_cp_rho_alpha_all,df_thermal_diffusivity_temperature_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all) for i in
-        tqdm(range(len(df_exp_condition_spreadsheet))))
-
-    pickle.dump(joblib_output,open(code_directory+"result cache dump//regression_results_" + df_exp_condition_spreadsheet_filename, "wb"))
-
-
-
-def parallel_batch_experimental_results_mcmc_implicit_train_surrogate(df_exp_condition_spreadsheet_filename, code_directory,df_temperature_list,df_sample_cp_rho_alpha_all, df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all,mcmc_setting):
-    # df_exp_condition_spreadsheet = pd.read_excel(
-    #     code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
     # df_temperature_list, df_amplitude_phase_measurement_list = parallel_temperature_average_batch_experimental_results(df_exp_condition_spreadsheet_filename, data_directory, num_cores,code_directory)
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
         high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
-                                                              df_temperature_list[i], df_sample_cp_rho_alpha_all,
+                                                              df_temperature_list[i], df_sample_cp_rho_alpha,
                                                               df_solar_simulator_VQ, sigma_df, df_view_factor,
-                                                              df_LB_details_all, mcmc_setting)
+                                                              mcmc_setting)
 
 
 def parallel_result_summary(joblib_output,df_exp_condition_spreadsheet_filename,code_directory):
