@@ -1770,8 +1770,7 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
         'sigma_s = {:.2E}, Amax = {}, f_heating = {}, focal plane = {}, Rec = {}, T_LB_mean = {:.1f}, alpha_r_A = {:.2e}, alpha_r_B = {:.2e}.'.format(
             light_source_property['sigma_s'], light_source_property['Amax'], f_heating,
             vacuum_chamber_setting['focal_shift'],
-            sample_information['rec_name'], T_LB_mean_C,
-            sample_information['emissivity_front'],alpha_r_A,alpha_r_B))
+            sample_information['rec_name'], T_LB_mean_C,alpha_r_A,alpha_r_B))
 
     # print(T[:time_index,:,:])
     #
@@ -4489,21 +4488,14 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_info
         # print(parameter_name)
         if parameter_name in sample_information.keys():
             sample_information[parameter_name] = DOE_parameter_value
+            if parameter_name == 'absorptivity_front':
+                sample_information['absorptivity_solar'] = DOE_parameter_value
         elif parameter_name in vacuum_chamber_setting.keys():
             vacuum_chamber_setting[parameter_name] = DOE_parameter_value
         elif parameter_name in numerical_simulation_setting.keys():
             numerical_simulation_setting[parameter_name] = DOE_parameter_value
         elif parameter_name in solar_simulator_settings.keys():
             solar_simulator_settings[parameter_name] = DOE_parameter_value
-            if parameter_name == 'f_heating':
-                if DOE_parameter_value >=0.08:
-                    numerical_simulation_setting['N_cycle'] = 25
-                elif DOE_parameter_value <0.08 and DOE_parameter_value>=0.04:
-                    numerical_simulation_setting['N_cycle'] = 15
-                elif DOE_parameter_value <0.04 and DOE_parameter_value>0.005:
-                    numerical_simulation_setting['N_cycle'] = 6
-                elif DOE_parameter_value < 0.005:
-                    numerical_simulation_setting['N_cycle'] = 4
         elif parameter_name in light_source_property.keys():
             light_source_property[parameter_name] = DOE_parameter_value
 
@@ -4749,7 +4741,7 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
 
 
         for parameter_name in parameter_name_columns:
-            if parameter_name == 'alpha_r':
+            if parameter_name == 'alpha_r_B':
                 legend_temp = 'Thermal diffusivity: '+ r'$\alpha$'
             elif parameter_name == 'Amax':
                 legend_temp = 'Peak nominal intensity: '+ r'$A_{max}$'
