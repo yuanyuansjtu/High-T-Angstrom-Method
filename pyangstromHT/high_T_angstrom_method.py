@@ -3652,7 +3652,7 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     N_Rs = int(df_exp_condition['N_Rs_pixels'])
     mcmc_mode = df_exp_condition['analysis_mode']
 
-    vacuum_chamber_setting = {'N_Rs': N_Rs, 'R0': R0,'focal_shift':focal_shift,'R_analysis':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}'.format(
