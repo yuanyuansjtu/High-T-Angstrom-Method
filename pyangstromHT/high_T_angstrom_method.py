@@ -2154,7 +2154,7 @@ def simulation_result_amplitude_phase_extraction(sample_information,
     R_analysis = vacuum_chamber_setting['R_analysis_node']
     simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
     N_stable_cycle_output = numerical_simulation_setting['N_stable_cycle_output']
-
+    N_div = numerical_simulation_setting['N_div']
     # print(sample_information)
     T_temp, time_T_, r_, N_one_cycle, q_solar = finite_difference_implicit_variable_properties(sample_information,vacuum_chamber_setting,solar_simulator_settings,
                                                                                                light_source_property,numerical_simulation_setting,df_solar_simulator_VQ,sigma_df, code_directory,
@@ -2188,20 +2188,20 @@ def simulation_result_amplitude_phase_extraction(sample_information,
 
 
     # convert node back to pixels
-    r_pixel = np.array(df_amp_phase_simulated_[1::2]['r'])/2
-    amp_ratio = df_amp_phase_simulated_[1::2]['amp_ratio']
-    phase_diff = df_amp_phase_simulated_[1::2]['phase_diff']
-    r_ref = np.array(df_amp_phase_simulated_[1::2]['r_ref'])/2
+    r_pixel = np.array(df_amp_phase_simulated_[N_div-1::N_div]['r'])/N_div
+    amp_ratio = df_amp_phase_simulated_[N_div-1::N_div]['amp_ratio']
+    phase_diff = df_amp_phase_simulated_[N_div-1::N_div]['phase_diff']
+    r_ref = np.array(df_amp_phase_simulated_[N_div-1::N_div]['r_ref'])/N_div
 
     df_amp_phase_simulated = pd.DataFrame(data = {'r_pixels':r_pixel,'r_ref_pixels':r_ref,'amp_ratio':amp_ratio,'phase_diff':phase_diff}) # This outputs pixels
 
-    df_temperature_simulation_steady_oscillation = pd.DataFrame(data =T_[-N_stable_cycle_output * N_one_cycle::N_skip_time,::2])
+    df_temperature_simulation_steady_oscillation = pd.DataFrame(data =T_[-N_stable_cycle_output * N_one_cycle::N_skip_time,::N_div])
     df_temperature_simulation_steady_oscillation['reltime'] = time_T_[-N_stable_cycle_output * N_one_cycle::N_skip_time]
 
-    df_temperature_transient = pd.DataFrame(data = T_[::N_skip_time, ::2])
+    df_temperature_transient = pd.DataFrame(data = T_[::N_skip_time, ::N_div])
     df_temperature_transient['reltime'] = time_T_[::N_skip_time]
 
-    df_solar_simulator_heat_flux = pd.DataFrame(data=q_solar[-N_stable_cycle_output * N_one_cycle::N_skip_time, ::2])
+    df_solar_simulator_heat_flux = pd.DataFrame(data=q_solar[-N_stable_cycle_output * N_one_cycle::N_skip_time, ::N_div])
     df_solar_simulator_heat_flux['reltime'] = time_T_[-N_stable_cycle_output * N_one_cycle::N_skip_time]
 
     return df_amp_phase_simulated, df_temperature_simulation_steady_oscillation, df_solar_simulator_heat_flux, df_temperature_transient
@@ -2988,6 +2988,7 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
     N_Rs = int(df_exp_condition['N_Rs_pixels'])
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
+    N_div = int(df_exp_condition['N_div'])
 
     # alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
     # alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
@@ -3016,11 +3017,12 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
     # Note that T_sur1 is read in degree C, must be converted to K.
     # Indicate where light_blocker is used or not, option here: True, False
 
-    vacuum_chamber_setting = {'N_Rs_node': 2*N_Rs, 'R0_node': 2*R0, 'focal_shift':focal_shift,'R_analysis_node':2*R_analysis-2,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'N_Rs_node': N_div*N_Rs, 'R0_node': N_div*R0, 'focal_shift':focal_shift,'R_analysis_node':N_div*R_analysis-2*N_div+2,'light_blocker':df_exp_condition['light_blocker']}
     # vacuum_chamber_setting
 
-    numerical_simulation_setting = {'Nr_node': 2*Nr-1,
+    numerical_simulation_setting = {'Nr_node': N_div*Nr-N_div+1,
                                     'N_cycle': int(df_exp_condition['N_cycle']),
+                                    'N_div':N_div,
                                     'simulated_amp_phase_extraction_method': df_exp_condition['simulated_amp_phase_extraction_method'],
                                     'gap_node': gap,
                                     'regression_method': df_exp_condition['regression_method'],
@@ -3096,6 +3098,7 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
     N_Rs = int(df_exp_condition['N_Rs_pixels'])
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
+    N_div = int(df_exp_condition['N_div'])
 
     # alpha_r_A = float(df_sample_cp_rho_alpha['alpha_r_A'])
     # alpha_r_B = float(df_sample_cp_rho_alpha['alpha_r_B'])
@@ -3129,10 +3132,11 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
     # Note that T_sur1 is read in degree C, must be converted to K.
     # Indicate where light_blocker is used or not, option here: True, False
 
-    vacuum_chamber_setting = {'N_Rs_node': 2*N_Rs, 'R0_node': 2*R0, 'focal_shift':focal_shift,'R_analysis_node':2*R_analysis-2,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'N_Rs_node': N_div*N_Rs, 'R0_node': N_div*R0, 'focal_shift':focal_shift,'R_analysis_node':N_div*R_analysis-2*N_div+2,'light_blocker':df_exp_condition['light_blocker']}
     # vacuum_chamber_setting
 
-    numerical_simulation_setting = {'Nr_node': 2*Nr-1,
+    numerical_simulation_setting = {'Nr_node': N_div*Nr-N_div+1,
+                                    'N_div':N_div,
                                     'N_cycle': int(df_exp_condition['N_cycle']),
                                     'simulated_amp_phase_extraction_method': df_exp_condition['simulated_amp_phase_extraction_method'],
                                     'gap_node': gap,
@@ -3266,6 +3270,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     # this function read a row from an excel spread sheet and execute
 
     rec_name = df_exp_condition['rec_name']
+    N_div = int(df_exp_condition['N_div'])
     #view_factor_setting = df_exp_condition['view_factor_setting']
 
     #regression_module = df_exp_condition['regression_module']
@@ -3313,11 +3318,12 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     # Note that T_sur1 is read in degree C, must be converted to K.
     # Indicate where light_blocker is used or not, option here: True, False
 
-    vacuum_chamber_setting = {'N_Rs_node': 2*N_Rs, 'R0_node': 2*R0, 'focal_shift':focal_shift,'R_analysis_node':2*R_analysis-2,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'N_Rs_node': N_div*N_Rs, 'R0_node': N_div*R0, 'focal_shift':focal_shift,'R_analysis_node':N_div*R_analysis-2*N_div+2,'light_blocker':df_exp_condition['light_blocker']}
     # vacuum_chamber_setting
 
     #note that #node = 2*# pixels
-    numerical_simulation_setting = {'Nr_node': 2*Nr-1,
+    numerical_simulation_setting = {'Nr_node': N_div*Nr-N_div+1,
+                                    'N_div':N_div,
                                     'N_cycle': int(df_exp_condition['N_cycle']),
                                     'simulated_amp_phase_extraction_method': df_exp_condition['simulated_amp_phase_extraction_method'],
                                     'gap_node': gap,
