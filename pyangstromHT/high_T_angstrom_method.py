@@ -4573,6 +4573,7 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
     alpha_T_array_std = alpha_T_array.std(axis=1)
+    alpha_std_to_mean_avg = np.mean(alpha_T_array_std/alpha_T_array_mean)
 
     alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
 
@@ -4618,18 +4619,18 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
-    axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
+    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
                     label='measurement')
-    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'],
+    axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                        amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean),
                        label='simulated')
     axes[2, 1].set_xlabel('R (node num)')
     axes[2, 1].set_ylabel('Amplitude ratio')
     axes[2, 1].legend()
 
-    axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
+    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
                     label='measurement')
-    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'],
+    axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                        phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean),
                        label='simulated')
     axes[2, 2].set_xlabel('R (node num)')
@@ -4675,6 +4676,8 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     print(rec_name + " is shown here, and with mean sigma_s = {:.2e}, alpha_A = {:.2e}, alpha_B = {:.2e}".format(
         accepted_samples_array.T[0].mean(), accepted_samples_array.T[1].mean(), accepted_samples_array.T[2].mean()))
     # return f
+    return accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, alpha_std_to_mean_avg, np.min(T_array), np.max(T_array), amp_ratio_approx, phase_diff_approx, ss_temp_approx
+
 
 
 def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperature, df_amplitude_phase_measurement,
@@ -4720,7 +4723,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
     if mcmc_mode == 'RW_Metropolis':
-        n_burn = int(0.4*len(accepted_samples_array.T[0]))
+        n_burn = int(0.3*len(accepted_samples_array.T[0]))
     else:
         n_burn = int(0.05 * len(accepted_samples_array.T[0]))
 
@@ -4766,6 +4769,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
 
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
     alpha_T_array_std = alpha_T_array.std(axis=1)
+    alpha_std_to_mean_avg = np.mean(alpha_T_array_std/alpha_T_array_mean)
 
     alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
 
@@ -4812,33 +4816,33 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
-    axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
+    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
                     label='measurement')
-    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'],
+    axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                        amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
                        label='simulated')
     axes[2, 1].set_xlabel('R (node num)')
     axes[2, 1].set_ylabel('Amplitude ratio')
     axes[2, 1].legend()
 
-    axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
+    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
                     label='measurement')
-    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'],
+    axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                        phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
                        label='simulated')
     axes[2, 2].set_xlabel('R (node num)')
     axes[2, 2].set_ylabel('Phase difference')
     axes[2, 2].legend()
 
-    axes[3, 0].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0],
+    axes[2, 3].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0],
                     label='simulated R = {:}'.format(R0))
-    axes[3, 0].plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
-    axes[3, 0].plot(
+    axes[2, 3].plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
+    axes[2, 3].plot(
         ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0 + R_analysis],
         label='simulated R = {:}'.format(R0 + R_analysis))
-    axes[3, 0].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
-    axes[3, 0].set_ylabel('Temperature (K)')
-    axes[3, 0].legend()
+    axes[2, 3].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
+    axes[2, 3].set_ylabel('Temperature (K)')
+    axes[2, 3].legend()
 
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
@@ -4850,6 +4854,11 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     # def plot_auto_correlation(trace, lags):
 
     lags = 100
+
+    autocorr_trace_sigma = auto_correlation_function(accepted_samples_trim[:, 0], lags)
+    axes[3, 0].plot(autocorr_trace_sigma)
+    axes[3, 0].set_xlabel('lags N', fontsize=14)
+    axes[3, 0].set_ylabel('sigma_s', fontsize=14)
 
     autocorr_trace_alpha_A = auto_correlation_function(accepted_samples_trim[:, 1], lags)
     axes[3, 1].plot(autocorr_trace_alpha_A)
@@ -4876,26 +4885,90 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     # return f
 
 
+    return accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean_avg, np.min(T_array), np.max(T_array), amp_ratio_approx, phase_diff_approx, ss_temp_approx
+
+
 
 def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
                                      df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_setting):
     df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    T_min_list = []
+    T_max_list = []
+    accepted_samples_trim_list = []
+    alpha_A_posterior_mean_list = []
+    alpha_B_posterior_mean_list = []
+    sigma_s_posterior_mean_list = []
+    alpha_std_to_mean_list = []
+
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
-        show_mcmc_results_one_case(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
-                                   df_temperature_list[i], df_amplitude_phase_measurement_list[i],
-                                   df_sample_cp_rho_alpha, mcmc_setting)
+        accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean,alpha_std_to_mean, \
+        T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
+                                   df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
+
+        T_min_list.append(T_exp_min)
+        T_max_list.append(T_exp_max)
+        accepted_samples_trim_list.append(accepted_samples_trim)
+        alpha_A_posterior_mean_list.append(alpha_A_posterior_mean)
+        alpha_B_posterior_mean_list.append(alpha_B_posterior_mean)
+        sigma_s_posterior_mean_list.append(sigma_s_posterior_mean)
+        alpha_std_to_mean_list.append(alpha_std_to_mean)
+
+    df_result_summary = pd.DataFrame(data = {'T_min':T_min_list,'T_max':T_max_list,'sigma_s':sigma_s_posterior_mean_list,'alpha_A':alpha_A_posterior_mean_list,
+                                             'alpha_B':alpha_B_posterior_mean_list,'rec_name':df_exp_condition_spreadsheet['rec_name'],'R0_pixels':df_exp_condition_spreadsheet['R0_pixels'],
+                                             'V_DC':df_exp_condition_spreadsheet['V_DC'],'f_heating':df_exp_condition_spreadsheet['f_heating'],'alpha_std_to_mean':alpha_std_to_mean_list})
+
+    return df_result_summary, accepted_samples_trim
 
 
 def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
                                      df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_setting):
+
     df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
-    for i in tqdm(range(len(df_exp_condition_spreadsheet))):
-        show_mcmc_results_one_case_P4(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
-                                   df_temperature_list[i], df_amplitude_phase_measurement_list[i],
-                                   df_sample_cp_rho_alpha, mcmc_setting)
+    T_min_list = []
+    T_max_list = []
+    accepted_samples_trim_list = []
+    alpha_A_posterior_mean_list = []
+    alpha_B_posterior_mean_list = []
+    sigma_s_posterior_mean_list = []
+    T_bias_posterior_mean_list = []
+    alpha_std_to_mean_list = []
 
+    for i in tqdm(range(len(df_exp_condition_spreadsheet))):
+        accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean, \
+        T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case_P4(
+            df_exp_condition_spreadsheet.iloc[i, :], code_directory,
+            df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
+
+        T_min_list.append(T_exp_min)
+        T_max_list.append(T_exp_max)
+        accepted_samples_trim_list.append(accepted_samples_trim)
+        alpha_A_posterior_mean_list.append(alpha_A_posterior_mean)
+        alpha_B_posterior_mean_list.append(alpha_B_posterior_mean)
+        sigma_s_posterior_mean_list.append(sigma_s_posterior_mean)
+        T_bias_posterior_mean_list.append(T_bias_posterior_mean)
+        alpha_std_to_mean_list.append(alpha_std_to_mean)
+
+    df_result_summary = pd.DataFrame(
+        data={'T_min': T_min_list, 'T_max': T_max_list, 'sigma_s': sigma_s_posterior_mean_list,
+              'alpha_A': alpha_A_posterior_mean_list,
+              'alpha_B': alpha_B_posterior_mean_list, 'rec_name': df_exp_condition_spreadsheet['rec_name'],
+              'R0_pixels': df_exp_condition_spreadsheet['R0_pixels'],
+              'V_DC': df_exp_condition_spreadsheet['V_DC'], 'f_heating': df_exp_condition_spreadsheet['f_heating'],
+              'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list})
+
+    return df_result_summary, accepted_samples_trim
+
+
+# def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
+#                                      df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_setting):
+#     df_exp_condition_spreadsheet = pd.read_csv(
+#         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+#     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
+#         show_mcmc_results_one_case_P4(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
+#                                    df_temperature_list[i], df_amplitude_phase_measurement_list[i],
+#                                    df_sample_cp_rho_alpha, mcmc_setting)
 
 def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name, output_name,
                                      method, num_cores, code_directory, R0, R_analysis, focal_plane_relative_location):
