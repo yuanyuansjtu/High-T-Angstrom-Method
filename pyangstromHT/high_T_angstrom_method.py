@@ -1764,7 +1764,7 @@ def finite_difference_implicit_variable_properties_old(sample_information, vacuu
     cp_2 = sample_information['cp_c2']
     cp_3 = sample_information['cp_c3']
 
-    R0 = vacuum_chamber_setting['R0']
+    R0 = vacuum_chamber_setting['R0_node']
 
     alpha_r_A = float(sample_information['alpha_r_A'])
     alpha_r_B = float(sample_information['alpha_r_B'])
@@ -3283,7 +3283,7 @@ def evaluate_PC_node_P4(node_values,code_directory, sample_information,solar_sim
 
 
 
-def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_setting):
+def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_other_setting):
 
 
     sample_name = df_exp_condition['sample_name']
@@ -3363,6 +3363,12 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
                                 'V_DC': VDC}
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
@@ -3444,7 +3450,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
 
 
 
-def high_T_Angstrom_execute_one_case_mcmc_train_surrogate_P4(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_setting):
+def high_T_Angstrom_execute_one_case_mcmc_train_surrogate_P4(df_exp_condition, code_directory,df_temperature,df_sample_cp_rho_alpha, df_solar_simulator_VQ,sigma_df,df_view_factor,mcmc_other_setting):
 
 
     sample_name = df_exp_condition['sample_name']
@@ -3524,6 +3530,13 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate_P4(df_exp_condition, c
     solar_simulator_settings = {'f_heating': float(df_exp_condition['f_heating']),
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
                                 'V_DC': VDC}
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+
+
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
@@ -3829,7 +3842,7 @@ class LogLikeGrad(tt.Op):
         outputs[0][0] = grads
 
 
-def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
+def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature,mcmc_other_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
     LB_file_name = df_exp_condition['LB_file_name']
@@ -3853,6 +3866,12 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     mcmc_mode = df_exp_condition['analysis_mode']
 
     vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
@@ -3952,7 +3971,7 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
 
 
 
-def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
+def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_other_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
     LB_file_name = df_exp_condition['LB_file_name']
@@ -3976,6 +3995,11 @@ def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, c
     mcmc_mode = df_exp_condition['analysis_mode']
 
     vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
@@ -4079,7 +4103,7 @@ def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, c
 
 
 
-def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
+def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_other_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
     LB_file_name = df_exp_condition['LB_file_name']
@@ -4105,6 +4129,15 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     N_div = int(df_exp_condition['N_div'])
 
     vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    mcmc_setting = {
+        'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+        'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+        'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+        'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+        'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+        'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'], 'PC_order': mcmc_other_setting['PC_order'],
+        'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+        'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
@@ -4261,7 +4294,7 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
 
 
 
-def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_setting):
+def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory, code_directory,df_sample_cp_rho_alpha, df_amplitude_phase_measurement,df_temperature, mcmc_other_setting):
 
     focal_shift = float(df_exp_condition['focal_shift'])
     LB_file_name = df_exp_condition['LB_file_name']
@@ -4287,6 +4320,15 @@ def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory
     N_div = int(df_exp_condition['N_div'])
 
     vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    mcmc_setting = {
+        'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+        'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+        'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+        'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+        'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+        'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'], 'PC_order': mcmc_other_setting['PC_order'],
+        'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+        'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
@@ -4298,6 +4340,7 @@ def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory
         int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
+
 
 
     def physical_model_PC(parameter):
@@ -4493,9 +4536,16 @@ def parallel_regression_batch_experimental_results_mcmc(df_exp_condition_spreads
 
 
 def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature, df_amplitude_phase_measurement,
-                               df_sample_cp_rho_alpha, mcmc_setting):
+                               df_sample_cp_rho_alpha, mcmc_other_setting):
     # df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+
+
     parameter_initial = mcmc_setting['p_initial']
     LB_file_name = df_exp_condition['LB_file_name']
 
@@ -4522,6 +4572,8 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
     mcmc_mode = df_exp_condition['analysis_mode']
+
+
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
         'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3D{:}'.format(
@@ -4681,9 +4733,16 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
 
 def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperature, df_amplitude_phase_measurement,
-                               df_sample_cp_rho_alpha, mcmc_setting):
+                               df_sample_cp_rho_alpha, mcmc_other_setting):
     # df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
+
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
+                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
+                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+
+
     parameter_initial = mcmc_setting['p_initial']
     LB_file_name = df_exp_condition['LB_file_name']
 
@@ -4890,7 +4949,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
 
 
 def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
-                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_setting):
+                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_other_setting):
     df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     T_min_list = []
@@ -4902,6 +4961,20 @@ def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code
     alpha_std_to_mean_list = []
 
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
+
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        mcmc_setting = {
+            'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+            'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+            'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+            'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+            'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+            'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'],
+            'PC_order': mcmc_other_setting['PC_order'],
+            'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+            'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
+
         accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean,alpha_std_to_mean, \
         T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case(df_exp_condition_spreadsheet.iloc[i, :], code_directory,
                                    df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
@@ -4922,7 +4995,7 @@ def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code
 
 
 def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
-                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_setting):
+                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_other_setting):
 
     df_exp_condition_spreadsheet = pd.read_csv(
         code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
@@ -4936,6 +5009,19 @@ def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, c
     alpha_std_to_mean_list = []
 
     for i in tqdm(range(len(df_exp_condition_spreadsheet))):
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        mcmc_setting = {
+            'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+            'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+            'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+            'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+            'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+            'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'],
+            'PC_order': mcmc_other_setting['PC_order'],
+            'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+            'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
+
         accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean, \
         T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case_P4(
             df_exp_condition_spreadsheet.iloc[i, :], code_directory,
