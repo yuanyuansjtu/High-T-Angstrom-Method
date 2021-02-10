@@ -130,7 +130,7 @@ def show_one_contour(df_temperature_one_frame, x0, y0, R0, axes, x_adjust, y_adj
     axes.plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
     axes.plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
 
-    circle1 = plt.Circle((x0, y0), R0, edgecolor='b', fill=False, linewidth=3, linestyle='-.')
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
     circle2 = plt.Circle((x0, y0), R0 + R_zoom, edgecolor='b', fill=False, linewidth=3, linestyle='-.')
 
     axes.invert_yaxis()
@@ -205,11 +205,11 @@ def batch_contour_plots(code_directory, data_directory, df_exp_condition_spreads
         df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
 
         rec_num = df_exp_condition['rec_name']
-        x0 = df_exp_condition['x0']  # in pixels
-        y0 = df_exp_condition['y0']  # in pixels
+        x0 = df_exp_condition['x0_pixels']  # in pixels
+        y0 = df_exp_condition['y0_pixels']  # in pixels
 
-        R0 = df_exp_condition['R0']  # in pixels
-        R_analysis = df_exp_condition['R_analysis']
+        R0 = df_exp_condition['R0_pixels']  # in pixels
+        R_analysis = df_exp_condition['R_analysis_pixels']
 
         check_center_contour(code_directory, data_directory, rec_num, x0, y0, R0,R_analysis)
 
@@ -3371,13 +3371,13 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
 
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     if (os.path.isfile(dump_file_path_surrogate)):  # First check if a dump file exist:
         print('Found previous dump file :' + dump_file_path_surrogate)
@@ -3539,13 +3539,13 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate_P4(df_exp_condition, c
 
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     if (os.path.isfile(dump_file_path_surrogate)):  # First check if a dump file exist:
         print('Found previous dump file :' + dump_file_path_surrogate)
@@ -3874,13 +3874,13 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
 
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -3927,14 +3927,14 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     chain_num = mcmc_setting['chain_num']
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -4002,13 +4002,13 @@ def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, c
                     'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -4058,14 +4058,16 @@ def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, c
     chain_num = mcmc_setting['chain_num']
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+
+
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -4140,13 +4142,13 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
         'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -4268,14 +4270,14 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -4331,13 +4333,13 @@ def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory
         'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -4463,14 +4465,14 @@ def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -4576,14 +4578,14 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
     if mcmc_mode == 'RW_Metropolis':
@@ -4661,13 +4663,13 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -4771,14 +4773,14 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     mcmc_mode = df_exp_condition['analysis_mode']
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}R_a{:}gp{:}_{:}{:}{:}{:}{:}_NRs{:}Num{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
     if mcmc_mode == 'RW_Metropolis':
@@ -4865,13 +4867,13 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     T_bias_posterior_mean = accepted_samples_trim.T[3].mean()
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_ef{:}eb{:}af{:}ab{:}as{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -5042,7 +5044,7 @@ def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, c
               'alpha_B': alpha_B_posterior_mean_list, 'rec_name': df_exp_condition_spreadsheet['rec_name'],
               'R0_pixels': df_exp_condition_spreadsheet['R0_pixels'],
               'V_DC': df_exp_condition_spreadsheet['V_DC'], 'f_heating': df_exp_condition_spreadsheet['f_heating'],
-              'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list})
+              'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list,'V_AC':df_exp_condition_spreadsheet['V_amplitude']})
 
     return df_result_summary, accepted_samples_trim
 
@@ -5611,7 +5613,7 @@ def calculate_total_absorption(R_sample, pr, absorptivity_front, absorptivity_ba
 def batch_process_steady_state_emission_spread_sheet(data_directory, code_directory,
                                                      df_exp_condition_spreadsheet_filename, num_cores):
     df_exp_condition_spreadsheet = pd.read_csv(
-        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+        code_directory + "batch process information//steady emission//" + df_exp_condition_spreadsheet_filename)
     emission_list = []
     surr_absorption_list = []
 
