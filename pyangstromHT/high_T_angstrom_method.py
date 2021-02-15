@@ -4734,7 +4734,8 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
 
 
-def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperature, df_amplitude_phase_measurement,
+
+def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_directory, df_temperature, df_amplitude_phase_measurement,
                                df_sample_cp_rho_alpha, mcmc_other_setting):
     # df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
     # df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
@@ -4755,6 +4756,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     rec_name = df_exp_condition['rec_name']
     R0 = int(df_exp_condition['R0_pixels'])
     R_analysis = int(df_exp_condition['R_analysis_pixels'])
+
     gap = int(df_exp_condition['gap_pixels'])
     emissivity_front = float(df_exp_condition['emissivity_front'])
     emissivity_back = float(df_exp_condition['emissivity_back'])
@@ -4765,6 +4767,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     y0 = int(df_exp_condition['y0_pixels'])
     N_div = int(df_exp_condition['N_div'])
     N_Rs = int(df_exp_condition['N_Rs_pixels'])
+
 
     alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
 
@@ -4783,15 +4786,45 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
         int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
-    if mcmc_mode == 'RW_Metropolis':
+    if mcmc_mode == 'RW_Metropolis' or mcmc_mode=='RW_Metropolis_P4':
         n_burn = int(0.3*len(accepted_samples_array.T[0]))
     else:
         n_burn = int(0.05 * len(accepted_samples_array.T[0]))
 
     accepted_samples_trim = accepted_samples_array[n_burn:]
 
+
+    Nr = int(df_exp_condition['Nr_pixels'])
+    pr = float(df_exp_condition['sample_radius(m)'])/(Nr-1)
+    f_heating = float(df_exp_condition['f_heating'])
+    exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
+
+    colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta', 'brown', 'yellow', 'purple', 'cornflowerblue']
+
+    bb = df_exp_condition['anguler_range']
+    bb = bb[1:-1]  # reac_excel read an element as an array
+    index = None
+    angle_range = []
+    while (index != -1):
+        index = bb.find("],[")
+        element = bb[:index]
+        d = element.find(",")
+        element_after_comma = element[d + 1:]
+        element_before_comma = element[element.find("[") + 1:d]
+        # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
+        bb = bb[index + 2:]
+        angle_range.append([int(element_before_comma), int(element_after_comma)])
+
+    output_name = rec_name
+    path = data_directory + str(rec_name) + "//"
+    df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Nr,angle_range,pr, path,rec_name,output_name,'MA', 2, code_directory)
+
+
+
+
     #f, axes = plt.subplots(4, 3, figsize=(26, 24))
-    f, axes = plt.subplots(4, 4, figsize=(26, 24))
+    f, axes = plt.subplots(5, 4, figsize=(24, 30))
+
     axes[0, 0].hist(accepted_samples_trim.T[0], bins=30)
     axes[0, 0].set_xlabel('sigma_s', fontsize=14)
 
@@ -4841,9 +4874,9 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='mcmc mean')
     axes[2, 0].plot(T_array, alpha_reference, color='r', label='reference')
     #axes[2, 0].set_ylim([0,2.5e-5])
-    axes[2, 0].set_xlabel('Temperature (K)')
-    axes[2, 0].set_ylabel('Thermal diffusivity (m2/s)')
-    axes[2, 0].legend()
+    axes[2, 0].set_xlabel('Temperature (K)',fontsize=12, fontweight='bold')
+    axes[2, 0].set_ylabel('Thermal diffusivity (m2/s)', fontsize=12, fontweight='bold')
+    axes[2, 0].legend(prop={'weight': 'bold', 'size': 12})
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
 
     def residual(params, x, data):
@@ -4878,22 +4911,22 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
     axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
-                    label='measurement')
+                    label='measurement',color = 'red')
     axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                        amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
-                       label='simulated')
-    axes[2, 1].set_xlabel('R (node num)')
-    axes[2, 1].set_ylabel('Amplitude ratio')
-    axes[2, 1].legend()
+                       label='simulated',color = 'black')
+    axes[2, 1].set_xlabel('R (node num)', fontsize=12, fontweight='bold')
+    axes[2, 1].set_ylabel('Amplitude ratio', fontsize=12, fontweight='bold')
+    axes[2, 1].legend(prop={'weight': 'bold', 'size': 10})
 
     axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
-                    label='measurement')
+                    label='measurement',color = 'red')
     axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                        phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
-                       label='simulated')
-    axes[2, 2].set_xlabel('R (node num)')
-    axes[2, 2].set_ylabel('Phase difference')
-    axes[2, 2].legend()
+                       label='simulated',color = 'black')
+    axes[2, 2].set_xlabel('R (node num)', fontsize=12, fontweight='bold')
+    axes[2, 2].set_ylabel('Phase difference', fontsize=12, fontweight='bold')
+    axes[2, 2].legend(prop={'weight': 'bold', 'size': 10})
 
     axes[2, 3].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0],
                     label='simulated R = {:}'.format(R0))
@@ -4902,8 +4935,9 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
         ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0 + R_analysis],
         label='simulated R = {:}'.format(R0 + R_analysis))
     axes[2, 3].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
-    axes[2, 3].set_ylabel('Temperature (K)')
-    axes[2, 3].legend()
+    axes[2, 3].set_ylabel('Temperature (K)', fontsize=12, fontweight='bold')
+    axes[2, 3].set_xlabel('Time (s)', fontsize=12, fontweight='bold')
+    axes[2, 3].legend(prop={'weight': 'bold', 'size': 10})
 
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
@@ -4936,6 +4970,159 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
     axes[3, 3].set_xlabel('lags N', fontsize=14)
     axes[3, 3].set_ylabel('T_bias', fontsize=14)
 
+    df_temperature_angle_list = []
+    df_amp_phase_angle_list = []
+    for j, angle in enumerate(angle_range):
+        # note radial_temperature_average_disk_sample automatically checks if a dump file exist
+        df_temperature_ = df_temperature_list_all_ranges[j]
+        df_amplitude_phase_measurement_ = batch_process_horizontal_lines(df_temperature_, f_heating, R0, gap, R_analysis,
+                                                                        exp_amp_phase_extraction_method)
+        df_temperature_angle_list.append(df_temperature_)
+        df_amp_phase_angle_list.append(df_amplitude_phase_measurement_)
+
+        axes[4, 2].scatter(df_amplitude_phase_measurement_['r'],
+                    df_amplitude_phase_measurement_['amp_ratio'], facecolors='none',
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+
+    axes[4, 2].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 2].set_ylabel('Amplitude Ratio', fontsize=12, fontweight='bold')
+    axes[4, 2].legend(prop={'weight': 'bold', 'size': 10})
+
+
+    for j, angle in enumerate(angle_range):
+        df_temperature_ = df_temperature_angle_list[j]
+        df_amplitude_phase_measurement_ = df_amp_phase_angle_list[j]
+        axes[4, 3].scatter(df_amplitude_phase_measurement_['r'],
+                    df_amplitude_phase_measurement_['phase_diff'], facecolors='none',
+                    s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+    axes[4, 3].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 3].set_ylabel('Phase difference (rad)', fontsize=12, fontweight='bold')
+    axes[4, 3].legend(prop={'weight': 'bold', 'size': 10})
+
+
+    rep_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_rep_dump'
+    # rec_name
+    if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
+        temp_dump = pickle.load(open(rep_csv_dump_path, 'rb'))
+        df_first_frame = temp_dump[0]
+        df_mid_frame = temp_dump[1]
+        frame_num_first = temp_dump[2]
+        frame_num_mid = temp_dump[3]
+
+    else:  # If not we obtain the dump file, note the dump file is averaged radial temperature
+
+        file_name_0 = [path + x for x in os.listdir(path)][0]
+        n0 = file_name_0.rfind('//')
+        n1 = file_name_0.rfind('.csv')
+        frame_num_first = file_name_0[n0 + 2:n1]
+
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5, header=None)
+
+        N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
+        #N_mid = 20
+        file_name_1 = [path + x for x in os.listdir(path)][N_mid]
+        n2 = file_name_1.rfind('//')
+        n3 = file_name_1.rfind('.csv')
+        frame_num_mid = file_name_1[n2 + 2:n3]
+
+        df_mid_frame = pd.read_csv(file_name_1, skiprows=5, header=None)
+
+        temp_dump = [df_first_frame, df_mid_frame, frame_num_first, frame_num_mid]
+
+        pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    #ax = plt.gca()
+    CS = axes[4, 0].contour(X, Y, Z, 18)
+    axes[4, 0].plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    axes[4, 0].plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    R_angle_show = R0 + R_analysis
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01 / pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+    axes[4, 0].invert_yaxis()
+    axes[4, 0].clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    axes[4, 0].add_artist(circle1)
+    axes[4, 0].add_artist(circle2)
+    axes[4, 0].add_artist(circle3)
+
+    axes[4, 0].set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 0].set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    #axes[4, 2].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        axes[4, 0].plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0, y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.',color='blue', lw=2)
+
+
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_mid_frame.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    #ax = plt.gca()
+    CS = axes[4, 1].contour(X, Y, Z, 18)
+    axes[4, 1].plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    axes[4, 1].plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    R_angle_show = R0 + R_analysis
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01 / pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+    axes[4, 1].invert_yaxis()
+    axes[4, 1].clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    axes[4, 1].add_artist(circle1)
+    axes[4, 1].add_artist(circle2)
+    axes[4, 1].add_artist(circle3)
+
+    axes[4, 1].set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 1].set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    #axes[4, 3].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        axes[4, 1].plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)], [y0, y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.',color='blue', lw=2)
+
+
+    for i in range(5):
+        for j in range(4):
+            for tick in axes[i, j].xaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=10)
+                tick.label.set_fontweight('bold')
+            for tick in axes[i, j].yaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=10)
+                tick.label.set_fontweight('bold')
     f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,float(df_exp_condition['f_heating']),float(df_exp_condition['V_DC']),R0,R_analysis,int(100 * float(df_exp_condition['emissivity_front'])),
                                                                                                              int(100 * float( df_exp_condition['emissivity_back'])), int(100 * float(df_exp_condition['absorptivity_solar'])),x0, y0),y=0.91, fontsize=16)
     # plt.show()
@@ -4947,6 +5134,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory, df_temperatu
 
 
     return accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean_avg, np.min(T_array), np.max(T_array), amp_ratio_approx, phase_diff_approx, ss_temp_approx
+
 
 
 
@@ -4996,7 +5184,7 @@ def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code
     return df_result_summary, accepted_samples_trim
 
 
-def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
+def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory,data_directory, df_temperature_list,
                                      df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_other_setting):
 
     df_exp_condition_spreadsheet = pd.read_csv(
@@ -5026,7 +5214,7 @@ def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, c
 
         accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean, \
         T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case_P4(
-            df_exp_condition_spreadsheet.iloc[i, :], code_directory,
+            df_exp_condition_spreadsheet.iloc[i, :], code_directory,data_directory,
             df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
 
         T_min_list.append(T_exp_min)
@@ -5047,6 +5235,42 @@ def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, c
               'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list,'V_AC':df_exp_condition_spreadsheet['V_amplitude']})
 
     return df_result_summary, accepted_samples_trim
+
+
+def mcmc_result_vs_reference_visualization(df_result_summary, f_heating, R0_max, mcmc_method, alpha_A, alpha_B,ylim):
+    df_result_summary_ = df_result_summary.query("f_heating =={:} and R0_pixels<{:}".format(f_heating, R0_max))
+
+    plt.figure(figsize=(8, 6))
+    T_list = []
+    alpha_list = []
+    for index, item in df_result_summary_.iterrows():
+        # print(item)
+        T = np.linspace(item['T_min'], item['T_max'], 3)
+        alpha = 1 / (T * item['alpha_A'] + item['alpha_B'])
+        plt.fill_between(T, alpha - alpha * item['alpha_std_to_mean'] * 3,
+                         alpha + alpha * item['alpha_std_to_mean'] * 3,
+                         label='R0 = {:}, V = {:}'.format(item['R0_pixels'], item['V_DC']), alpha=0.5)
+        T_list = T_list + list(T)
+
+    T_ref = np.linspace(np.sort(np.array(T_list))[0], np.sort(np.array(T_list))[-1], 10)
+    plt.errorbar(T_ref, 1 / (T_ref * alpha_A + alpha_B), yerr=1 / (T_ref * alpha_A + alpha_B) * 0.05, label='Reference',
+                 capsize=5, elinewidth=2)
+    ax = plt.gca()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(fontsize=10)
+        tick.label.set_fontweight('bold')
+
+    plt.grid()
+    plt.legend(prop={'weight': 'bold', 'size': 12})
+    plt.ylim(ylim)
+    plt.xlabel('Temperature(K)', fontsize=14, fontweight='bold')
+    plt.ylabel('Thermal diffusivity (m2/s)', fontsize=14, fontweight='bold')
+    plt.title("f_heating = {:} Hz, {:}, with T_bias".format(f_heating, mcmc_method), fontsize=12, fontweight='bold')
+    plt.show()
+
 
 
 # def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory, df_temperature_list,
