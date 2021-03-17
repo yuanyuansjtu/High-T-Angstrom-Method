@@ -16,7 +16,9 @@ import random
 from lmfit import minimize, Parameters
 
 from scipy.stats import uniform
-
+import matplotlib.ticker as mticker
+import matplotlib as mpl
+from scipy.optimize import minimize as minimize2
 
 import pymc3 as pm
 import theano
@@ -2018,6 +2020,11 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
                                                        light_source_property,
                                                        df_solar_simulator_VQ, sigma_df)
 
+    #r_lb_window,lb_window = pd.read_csv('LB_window_function.csv')
+    #f_lb_window = interp1d(r_lb_window,lb_window)
+    #lb_window_function = f_lb_window(np.arange(Nr))
+    #q_solar = q_solar*lb_window_function
+
     T_temp = np.zeros(Nr)
     N_steady_count = 0
     time_index = Nt - 1
@@ -3013,7 +3020,7 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
                           'emissivity_back': emissivity_back,
                           'absorptivity_back': absorptivity_back,
                           'absorptivity_solar': absorptivity_solar,
-                          'sample_name':sample_name,'rec_name': rec_name}
+                          'sample_name':sample_name,'rec_name': rec_name,'T_bias':0}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
@@ -3040,9 +3047,6 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
                                 'V_DC': VDC}
 
 
-
-
-
     regression_result = None
 
     if df_exp_condition['regression_parameter'] == 'alpha_r':
@@ -3051,14 +3055,16 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
         params.add('alpha_r_A', value=float(df_exp_condition['alpha_r_A_initial']), min=0.5,max = 100)
         params.add('alpha_r_B', value=float(df_exp_condition['alpha_r_B_initial']), min=-1000, max = 20000)
         params.add('sigma_s', value=float(df_exp_condition['sigma_s_initial']), min=4e-3,max = 18e-3)
+        params.add('T_bias', value=float(df_exp_condition['T_bias_initial']), min=-100,max = 100)
+
 
         out = lmfit.minimize(residual_update, params,
-                             args=(df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+                             args=(df_amplitude_phase_measurement,df_temperature, sample_information, vacuum_chamber_setting,
                                    solar_simulator_settings, numerical_simulation_setting,
                                    code_directory, df_solar_simulator_VQ, sigma_df, df_view_factor, df_LB_details_all),
                              xtol=df_exp_condition['regression_residual_converging_criteria'])
 
-        regression_result = np.array([out.params['sigma_s'].value, out.params['alpha_r_A'].value, out.params['alpha_r_B'].value])
+        regression_result = np.array([out.params['sigma_s'].value, out.params['alpha_r_A'].value, out.params['alpha_r_B'].value,out.params['T_bias'].value])
 
 
 
@@ -3126,8 +3132,8 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
                           'absorptivity_solar': absorptivity_solar,
                           'sample_name':sample_name,
                           'rec_name': rec_name,
-                          'alpha_r_A':float(df_exp_condition['alpha_r_A_initial']),
-                          'alpha_r_B':float(df_exp_condition['alpha_r_B_initial'])}
+                          'alpha_r_A':float(df_exp_condition['alpha_r_A']),
+                          'alpha_r_B':float(df_exp_condition['alpha_r_B']),'T_bias':float(df_exp_condition['T_bias'])}
 
 
     # sample_information
@@ -3141,7 +3147,7 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
                                     'N_div':N_div,
                                     'N_cycle': int(df_exp_condition['N_cycle']),
                                     'simulated_amp_phase_extraction_method': df_exp_condition['simulated_amp_phase_extraction_method'],
-                                    'gap_node': gap,
+                                    'gap_node': gap*N_div,
                                     'regression_method': df_exp_condition['regression_method'],
                                     'regression_parameter': df_exp_condition['regression_parameter'],
                                     'regression_residual_converging_criteria': df_exp_condition[
@@ -3154,7 +3160,7 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
                                 'V_DC': VDC}
 
-    sigma_s_ = float(df_exp_condition['sigma_s_initial'])
+    sigma_s_ = float(df_exp_condition['sigma_s'])
 
 
     Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sigma_s_,
@@ -3173,7 +3179,7 @@ def high_T_Angstrom_execute_one_case_show_simulation(df_exp_condition, data_dire
 
 
 
-def residual_update(params, df_amplitude_phase_measurement, sample_information, vacuum_chamber_setting,
+def residual_update(params, df_amplitude_phase_measurement, df_temperature_measurement, sample_information, vacuum_chamber_setting,
                     solar_simulator_settings, numerical_simulation_setting, code_directory,
                     df_solar_simulator_VQ, sigma_df, df_view_factor, df_LB_details_all):
     error = None
@@ -3183,6 +3189,11 @@ def residual_update(params, df_amplitude_phase_measurement, sample_information, 
     sigma_s_ = params['sigma_s'].value
     sample_information['alpha_r_A'] = params['alpha_r_A'].value
     sample_information['alpha_r_B'] = params['alpha_r_B'].value
+    sample_information['T_bias'] = params['T_bias'].value
+
+
+    R0 = vacuum_chamber_setting['R0_node']
+    R_analysis = vacuum_chamber_setting['R_analysis_node']
 
     Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sigma_s_,
                                                                       numerical_simulation_setting,
@@ -3194,21 +3205,23 @@ def residual_update(params, df_amplitude_phase_measurement, sample_information, 
                                                  vacuum_chamber_setting, solar_simulator_settings,
                                                  light_source_property, numerical_simulation_setting,code_directory,df_solar_simulator_VQ,sigma_df,df_view_factor,df_LB_details_all)
 
-    phase_relative_error = np.array([abs((measure - calculate) / measure) for measure, calculate in
+    phase_relative_error = np.array([((measure - calculate) / dP)**2 for measure, calculate, dP in
                                      zip(df_amplitude_phase_measurement['phase_diff'],
-                                         df_amp_phase_simulated['phase_diff'])])
+                                         df_amp_phase_simulated['phase_diff'], df_amplitude_phase_measurement['dP'])])
 
-    amplitude_relative_error = np.array([abs((measure - calculate) / measure) for measure, calculate in
+    amplitude_relative_error = np.array([((measure - calculate) / dA)**2 for measure, calculate, dA in
                                          zip(df_amplitude_phase_measurement['amp_ratio'],
-                                             df_amp_phase_simulated['amp_ratio'])])
+                                             df_amp_phase_simulated['amp_ratio'], df_amplitude_phase_measurement['dA'])])
 
+    temp_relative_error = ((df_temperature_measurement.iloc[:,R0].mean() - df_temperature_simulation.iloc[:,R0].mean())**2 + \
+                          (df_temperature_measurement.iloc[:,R0+R_analysis].mean() - df_temperature_simulation.iloc[:,R0+R_analysis].mean())**2)/9
 
     if regression_method == 1:
-        error = amplitude_relative_error
+        error = amplitude_relative_error + temp_relative_error
     elif regression_method == 2:
-        error = phase_relative_error
+        error = phase_relative_error + temp_relative_error
     elif regression_method == 0:
-        error = amplitude_relative_error + amplitude_relative_error
+        error = amplitude_relative_error + amplitude_relative_error + temp_relative_error
 
     return error
 
@@ -4034,7 +4047,7 @@ def high_T_Angstrom_execute_one_case_NUTs_P4(df_exp_condition, data_directory, c
         # p_T = T_regularization*(SS_T[:,R0:R0+R_analysis].mean(axis = 0) - np.array(df_temperature_measurement.iloc[:,R0:R0+R_analysis]))**2
 
         p_T = T_regularization * np.sum((simulation_SS_T[:, R0:R0 + 1].mean(axis=0) - np.array(
-            df_temperature_measurement.iloc[:, R0:R0 + 1].mean(axis=0))) ** 2) + T_regularization/2 * np.sum((simulation_SS_T[:, R0+R_analysis:R0+R_analysis + 1].mean(axis=0) - np.array(
+            df_temperature_measurement.iloc[:, R0:R0 + 1].mean(axis=0))) ** 2) + T_regularization * np.sum((simulation_SS_T[:, R0+R_analysis:R0+R_analysis + 1].mean(axis=0) - np.array(
             df_temperature_measurement.iloc[:, R0+R_analysis:R0+R_analysis + 1].mean(axis=0))) ** 2)
 
         if df_exp_condition['regression_method'] == 0:
@@ -4631,7 +4644,7 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
 
-    f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
+    #f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
     axes[2, 0].fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std,
                             alpha_T_array_mean + 3 * alpha_T_array_std,
                             alpha=0.2)
@@ -4734,6 +4747,26 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
 
 
+class MathTextSciFormatter(mticker.Formatter):
+    def __init__(self, fmt="%1.2e"):
+        self.fmt = fmt
+    def __call__(self, x, pos=None):
+        s = self.fmt % x
+        decimal_point = '.'
+        positive_sign = '+'
+        tup = s.split('e')
+        significand = tup[0].rstrip(decimal_point)
+        sign = tup[1][0].replace(positive_sign, '')
+        exponent = tup[1][1:].lstrip('0')
+        if exponent:
+            exponent = '10^{%s%s}' % (sign, exponent)
+        if significand and exponent:
+            s =  r'%s{\times}%s' % (significand, exponent)
+        else:
+            s =  r'%s%s' % (significand, exponent)
+        return "${}$".format(s)
+
+
 
 def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_directory, df_temperature, df_amplitude_phase_measurement,
                                df_sample_cp_rho_alpha, mcmc_other_setting):
@@ -4823,38 +4856,40 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
 
 
     #f, axes = plt.subplots(4, 3, figsize=(26, 24))
-    f, axes = plt.subplots(5, 4, figsize=(24, 30))
+    f, axes = plt.subplots(5, 4, figsize=(30, 38))
 
-    axes[0, 0].hist(accepted_samples_trim.T[0], bins=30)
-    axes[0, 0].set_xlabel('sigma_s', fontsize=14)
+    label_font_size = 18
 
-    axes[0, 1].hist(accepted_samples_trim.T[1], bins=30)
-    axes[0, 1].set_xlabel('alpha_A', fontsize=14)
+    axes[0, 0].hist(accepted_samples_trim.T[0], bins=15)
+    axes[0, 0].set_xlabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size,fontweight = 'bold')
 
-    axes[0, 2].hist(accepted_samples_trim.T[2], bins=30)
-    axes[0, 2].set_xlabel('alpha_B', fontsize=14)
+    axes[0, 1].hist(accepted_samples_trim.T[1], bins=15)
+    axes[0, 1].set_xlabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size,fontweight = 'bold')
 
-    axes[0, 3].hist(accepted_samples_trim.T[3], bins=30)
-    axes[0, 3].set_xlabel('T_bias', fontsize=14)
+    axes[0, 2].hist(accepted_samples_trim.T[2], bins=15)
+    axes[0, 2].set_xlabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size,fontweight = 'bold')
+
+    axes[0, 3].hist(accepted_samples_trim.T[3], bins=15)
+    axes[0, 3].set_xlabel('$T_{bias}$ (K)', fontsize=label_font_size,fontweight = 'bold')
 
     axes[1, 0].plot(accepted_samples_trim[:, 0])
-    axes[1, 0].set_ylabel('sigma_s', fontsize=14)
-    axes[1, 0].set_xlabel('sample num', fontsize=14)
+    axes[1, 0].set_ylabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 0].set_xlabel('sample num', fontsize=label_font_size,fontweight = 'bold')
 
     axes[1, 1].plot(accepted_samples_trim[:, 1])
-    axes[1, 1].set_ylabel('alpha_A', fontsize=14)
-    axes[1, 1].set_xlabel('sample num', fontsize=14)
+    axes[1, 1].set_ylabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 1].set_xlabel('sample num', fontsize=label_font_size,fontweight = 'bold')
 
     axes[1, 2].plot(accepted_samples_trim[:, 2])
-    axes[1, 2].set_ylabel('alpha_B', fontsize=14)
-    axes[1, 2].set_xlabel('sample num', fontsize=14)
+    axes[1, 2].set_ylabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 2].set_xlabel('sample num', fontsize=label_font_size,fontweight = 'bold')
 
     axes[1, 3].plot(accepted_samples_trim[:, 3])
-    axes[1, 3].set_ylabel('T_bias', fontsize=14)
-    axes[1, 3].set_xlabel('sample num', fontsize=14)
+    axes[1, 3].set_ylabel('$T_{bias}$ (K)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 3].set_xlabel('sample num', fontsize=label_font_size,fontweight = 'bold')
 
 
-    T_array = np.linspace(df_temperature.iloc[:, R0 + R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 50)
+    T_array = np.linspace(df_temperature.iloc[:, R0 + R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 4)
     alpha_T_array = np.zeros((len(T_array), len(accepted_samples_trim)))
 
     for i in range(len(accepted_samples_trim)):
@@ -4865,18 +4900,24 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
     alpha_T_array_std = alpha_T_array.std(axis=1)
     alpha_std_to_mean_avg = np.mean(alpha_T_array_std/alpha_T_array_mean)
 
+
     alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
 
-    f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
+    #f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
     axes[2, 0].fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std,
                             alpha_T_array_mean + 3 * alpha_T_array_std,
                             alpha=0.2)
-    axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='mcmc mean')
-    axes[2, 0].plot(T_array, alpha_reference, color='r', label='reference')
-    #axes[2, 0].set_ylim([0,2.5e-5])
-    axes[2, 0].set_xlabel('Temperature (K)',fontsize=12, fontweight='bold')
-    axes[2, 0].set_ylabel('Thermal diffusivity (m2/s)', fontsize=12, fontweight='bold')
-    axes[2, 0].legend(prop={'weight': 'bold', 'size': 12})
+    axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='Bayesian posterior distribution')
+    axes[2, 0].errorbar(T_array, alpha_reference,yerr = alpha_reference*0.05,
+                    label='reference value',capsize=5, elinewidth=2,color = 'green',fmt= 'o')
+
+        #plot(T_array, alpha_reference, color='r', label='reference value')
+    #axes[2, 0].set_ylim([0,2.1e-5])
+    axes[2, 0].set_xlabel('Temperature (K)',fontsize=label_font_size, fontweight='bold')
+    axes[2, 0].set_ylabel(r'Thermal diffusivity (m$^2$/s)', fontsize=label_font_size, fontweight='bold')
+    #axes[2, 0].yaxis.set_major_formatter(MathTextSciFormatter("%1.2e"))
+    #axes[2, 0].yaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=True, useOffset=False))
+    axes[2, 0].legend(prop={'weight': 'bold', 'size': 14})
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
 
     def residual(params, x, data):
@@ -4910,34 +4951,56 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
-    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
-                    label='measurement',color = 'red')
+    axes[2, 1].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],yerr = df_amplitude_phase_measurement['dA']*3,
+                    label='measurement',capsize=5, elinewidth=2,color = 'red',fmt= 'o')
     axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                        amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
-                       label='simulated',color = 'black')
-    axes[2, 1].set_xlabel('R (node num)', fontsize=12, fontweight='bold')
-    axes[2, 1].set_ylabel('Amplitude ratio', fontsize=12, fontweight='bold')
-    axes[2, 1].legend(prop={'weight': 'bold', 'size': 10})
+                       label='simulation',color = 'black')
+    axes[2, 1].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 1].set_ylabel('Amplitude ratio', fontsize=label_font_size, fontweight='bold')
+    #axes[2, 1].set_ylim([0,2.1e-5])
+    axes[2, 1].legend(prop={'weight': 'bold', 'size': 14})
 
-    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
-                    label='measurement',color = 'red')
+    # axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
+    #                 label='measurement',color = 'red')
+    axes[2, 2].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],yerr = df_amplitude_phase_measurement['dP']*3,
+                    label='measurement',capsize=5, elinewidth=2,color = 'red',fmt= 'o')
     axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                        phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean),
-                       label='simulated',color = 'black')
-    axes[2, 2].set_xlabel('R (node num)', fontsize=12, fontweight='bold')
-    axes[2, 2].set_ylabel('Phase difference', fontsize=12, fontweight='bold')
-    axes[2, 2].legend(prop={'weight': 'bold', 'size': 10})
+                       label='simulation',color = 'black')
+    axes[2, 2].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 2].set_ylabel('Phase difference', fontsize=label_font_size, fontweight='bold')
+    axes[2, 2].legend(prop={'weight': 'bold', 'size': 14})
 
-    axes[2, 3].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0],
-                    label='simulated R = {:}'.format(R0))
-    axes[2, 3].plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
-    axes[2, 3].plot(
-        ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0 + R_analysis],
-        label='simulated R = {:}'.format(R0 + R_analysis))
-    axes[2, 3].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
-    axes[2, 3].set_ylabel('Temperature (K)', fontsize=12, fontweight='bold')
-    axes[2, 3].set_xlabel('Time (s)', fontsize=12, fontweight='bold')
-    axes[2, 3].legend(prop={'weight': 'bold', 'size': 10})
+
+
+    T_ss_RO = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean, T_bias_posterior_mean)[:, R0]
+    time_ss_RO = np.linspace(0,2/f_heating,len(T_ss_RO))
+    axes[2, 3].plot(time_ss_RO, T_ss_RO,label='simulation R = {:}'.format(R0))
+
+
+    time_ss_measured_R0 = df_temperature.query('reltime<{:}'.format(2 / f_heating))['reltime']
+    T_ss_measured_R0 = df_temperature.iloc[:len(time_ss_measured_R0), R0]
+
+    # time_ss_measured_R0 = df_temperature.query('reltime<{:}'.format(2/f_heating))['reltime']
+    # T_ss_measured_R0 = df_temperature.iloc[:len(time_ss_measured_R0), R0]
+    axes[2, 3].plot(time_ss_measured_R0, T_ss_measured_R0, label='measurement R = {:}'.format(R0))
+
+
+    T_ss_RN = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,T_bias_posterior_mean)[:, R0 + R_analysis]
+    time_ss_RN = np.linspace(0,2/f_heating,len(T_ss_RN))
+    axes[2, 3].plot(time_ss_RN,T_ss_RN,label='simulation R = {:}'.format(R0 + R_analysis))
+
+    time_ss_measured_RN = time_ss_measured_R0
+    T_ss_measured_RN = df_temperature.iloc[:len(time_ss_measured_RN), R0+R_analysis]
+    # time_ss_measured_RN = df_temperature.query('reltime<{:}'.format(2/f_heating))['reltime']
+    # T_ss_measured_RN = df_temperature.iloc[:len(time_ss_measured_RN), R0+R_analysis]
+    axes[2, 3].plot(time_ss_measured_RN, T_ss_measured_RN, label='measurement R = {:}'.format(R0+R_analysis))
+
+    #axes[2, 3].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
+    axes[2, 3].set_ylabel('Temperature (K)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 3].set_xlabel('Time (s)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 3].legend(prop={'weight': 'bold', 'size': 14})
 
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
@@ -4952,23 +5015,23 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
 
     autocorr_trace_sigma = auto_correlation_function(accepted_samples_trim[:, 0], lags)
     axes[3, 0].plot(autocorr_trace_sigma)
-    axes[3, 0].set_xlabel('lags N', fontsize=14)
-    axes[3, 0].set_ylabel('sigma_s', fontsize=14)
+    axes[3, 0].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 0].set_ylabel('sigma_s', fontsize=label_font_size)
 
     autocorr_trace_alpha_A = auto_correlation_function(accepted_samples_trim[:, 1], lags)
     axes[3, 1].plot(autocorr_trace_alpha_A)
-    axes[3, 1].set_xlabel('lags N', fontsize=14)
-    axes[3, 1].set_ylabel('alpha_A', fontsize=14)
+    axes[3, 1].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 1].set_ylabel('alpha_A', fontsize=label_font_size)
 
     autocorr_trace_alpha_B = auto_correlation_function(accepted_samples_trim[:, 2], lags)
     axes[3, 2].plot(autocorr_trace_alpha_B)
-    axes[3, 2].set_xlabel('lags N', fontsize=14)
-    axes[3, 2].set_ylabel('alpha_B', fontsize=14)
+    axes[3, 2].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 2].set_ylabel('alpha_B', fontsize=label_font_size)
 
     autocorr_T_bias = auto_correlation_function(accepted_samples_trim[:, 3], lags)
     axes[3, 3].plot(autocorr_T_bias)
-    axes[3, 3].set_xlabel('lags N', fontsize=14)
-    axes[3, 3].set_ylabel('T_bias', fontsize=14)
+    axes[3, 3].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 3].set_ylabel('T_bias', fontsize=label_font_size)
 
     df_temperature_angle_list = []
     df_amp_phase_angle_list = []
@@ -4985,9 +5048,9 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
                     s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
 
 
-    axes[4, 2].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
-    axes[4, 2].set_ylabel('Amplitude Ratio', fontsize=12, fontweight='bold')
-    axes[4, 2].legend(prop={'weight': 'bold', 'size': 10})
+    axes[4, 2].set_xlabel('R (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 2].set_ylabel('Amplitude Ratio', fontsize=label_font_size, fontweight='bold')
+    axes[4, 2].legend(prop={'weight': 'bold', 'size': 12})
 
 
     for j, angle in enumerate(angle_range):
@@ -4997,9 +5060,9 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
                     df_amplitude_phase_measurement_['phase_diff'], facecolors='none',
                     s=60, linewidths=2, edgecolor=colors[j], label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
 
-    axes[4, 3].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
-    axes[4, 3].set_ylabel('Phase difference (rad)', fontsize=12, fontweight='bold')
-    axes[4, 3].legend(prop={'weight': 'bold', 'size': 10})
+    axes[4, 3].set_xlabel('R (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 3].set_ylabel('Phase difference (rad)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 3].legend(prop={'weight': 'bold', 'size': 12})
 
 
     rep_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_rep_dump'
@@ -5066,8 +5129,8 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
     axes[4, 0].add_artist(circle2)
     axes[4, 0].add_artist(circle3)
 
-    axes[4, 0].set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
-    axes[4, 0].set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 0].set_xlabel('x (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 0].set_ylabel('y (pixels)', fontsize=label_font_size, fontweight='bold')
     #axes[4, 2].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
 
     for j, angle in enumerate(angle_range):
@@ -5107,8 +5170,8 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
     axes[4, 1].add_artist(circle2)
     axes[4, 1].add_artist(circle3)
 
-    axes[4, 1].set_xlabel('x (pixels)', fontsize=12, fontweight='bold')
-    axes[4, 1].set_ylabel('y (pixels)', fontsize=12, fontweight='bold')
+    axes[4, 1].set_xlabel('x (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 1].set_ylabel('y (pixels)', fontsize=label_font_size, fontweight='bold')
     #axes[4, 3].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
 
     for j, angle in enumerate(angle_range):
@@ -5118,10 +5181,10 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
     for i in range(5):
         for j in range(4):
             for tick in axes[i, j].xaxis.get_major_ticks():
-                tick.label.set_fontsize(fontsize=10)
+                tick.label.set_fontsize(fontsize=12)
                 tick.label.set_fontweight('bold')
             for tick in axes[i, j].yaxis.get_major_ticks():
-                tick.label.set_fontsize(fontsize=10)
+                tick.label.set_fontsize(fontsize=12)
                 tick.label.set_fontweight('bold')
     f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,float(df_exp_condition['f_heating']),float(df_exp_condition['V_DC']),R0,R_analysis,int(100 * float(df_exp_condition['emissivity_front'])),
                                                                                                              int(100 * float( df_exp_condition['emissivity_back'])), int(100 * float(df_exp_condition['absorptivity_solar'])),x0, y0),y=0.91, fontsize=16)
@@ -5135,6 +5198,67 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
 
     return accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean_avg, np.min(T_array), np.max(T_array), amp_ratio_approx, phase_diff_approx, ss_temp_approx
 
+
+
+
+
+def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory,data_directory, df_temperature_list,
+                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_other_setting):
+
+    df_exp_condition_spreadsheet = pd.read_csv(
+        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    T_min_list = []
+    T_max_list = []
+    accepted_samples_trim_list = []
+    alpha_A_posterior_mean_list = []
+    alpha_B_posterior_mean_list = []
+    sigma_s_posterior_mean_list = []
+    T_bias_posterior_mean_list = []
+    alpha_std_to_mean_list = []
+    amp_ratio_approx_list = []
+    phase_diff_approx_list = []
+    ss_temp_approx_list = []
+
+    for i in tqdm(range(len(df_exp_condition_spreadsheet))):
+        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+
+        mcmc_setting = {
+            'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+            'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+            'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+            'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+            'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+            'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'],
+            'PC_order': mcmc_other_setting['PC_order'],
+            'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+            'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
+
+        accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean, \
+        T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case_P4(
+            df_exp_condition_spreadsheet.iloc[i, :], code_directory,data_directory,
+            df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
+
+        T_min_list.append(T_exp_min)
+        T_max_list.append(T_exp_max)
+        accepted_samples_trim_list.append(accepted_samples_trim)
+        alpha_A_posterior_mean_list.append(alpha_A_posterior_mean)
+        alpha_B_posterior_mean_list.append(alpha_B_posterior_mean)
+        sigma_s_posterior_mean_list.append(sigma_s_posterior_mean)
+        T_bias_posterior_mean_list.append(T_bias_posterior_mean)
+        alpha_std_to_mean_list.append(alpha_std_to_mean)
+        amp_ratio_approx_list.append(amp_ratio_approx)
+        phase_diff_approx_list.append(phase_diff_approx)
+        ss_temp_approx_list.append(ss_temp_approx)
+
+    df_result_summary = pd.DataFrame(
+        data={'T_min': T_min_list, 'T_max': T_max_list, 'sigma_s': sigma_s_posterior_mean_list,
+              'alpha_A': alpha_A_posterior_mean_list,
+              'alpha_B': alpha_B_posterior_mean_list, 'rec_name': df_exp_condition_spreadsheet['rec_name'],
+              'R0_pixels': df_exp_condition_spreadsheet['R0_pixels'],
+              'V_DC': df_exp_condition_spreadsheet['V_DC'], 'f_heating': df_exp_condition_spreadsheet['f_heating'],
+              'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list,'V_AC':df_exp_condition_spreadsheet['V_amplitude']})
+
+    return df_result_summary, accepted_samples_trim,amp_ratio_approx_list, phase_diff_approx_list, ss_temp_approx_list
 
 
 
@@ -5184,57 +5308,498 @@ def parallel_batch_show_mcmc_results(df_exp_condition_spreadsheet_filename, code
     return df_result_summary, accepted_samples_trim
 
 
-def parallel_batch_show_mcmc_results_P4(df_exp_condition_spreadsheet_filename, code_directory,data_directory, df_temperature_list,
-                                     df_amplitude_phase_measurement_list, df_sample_cp_rho_alpha, mcmc_other_setting):
+def show_mcmc_results_one_case_P4_match_phase(df_exp_condition, code_directory, data_directory, df_temperature,
+                                  df_amplitude_phase_measurement,
+                                  df_sample_cp_rho_alpha, mcmc_other_setting):
+    # df_exp_condition_spreadsheet = pd.read_excel(code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
+    # df_exp_condition_spreadsheet = pd.read_csv(code_directory+"batch process information//" + df_exp_condition_spreadsheet_filename)
 
-    df_exp_condition_spreadsheet = pd.read_csv(
-        code_directory + "batch process information//" + df_exp_condition_spreadsheet_filename)
-    T_min_list = []
-    T_max_list = []
-    accepted_samples_trim_list = []
-    alpha_A_posterior_mean_list = []
-    alpha_B_posterior_mean_list = []
-    sigma_s_posterior_mean_list = []
-    T_bias_posterior_mean_list = []
-    alpha_std_to_mean_list = []
+    mcmc_setting = {
+        'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
+        'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
+        'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
+        'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
+        'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
+        'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'], 'PC_order': mcmc_other_setting['PC_order'],
+        'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
+        'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
-    for i in tqdm(range(len(df_exp_condition_spreadsheet))):
-        df_exp_condition = df_exp_condition_spreadsheet.iloc[i, :]
+    parameter_initial = mcmc_setting['p_initial']
+    LB_file_name = df_exp_condition['LB_file_name']
 
-        mcmc_setting = {
-            'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
-            'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
-            'sigma_s_prior_range': [float(df_exp_condition['sigma_s_LL']), float(df_exp_condition['sigma_s_UL'])],
-            'T_bias_prior_range': [float(df_exp_condition['T_bias_LL']), float(df_exp_condition['T_bias_UL'])],
-            'step_size': mcmc_other_setting['step_size'], 'p_initial': mcmc_other_setting['p_initial'],
-            'N_total_mcmc_samples': mcmc_other_setting['N_total_mcmc_samples'],
-            'PC_order': mcmc_other_setting['PC_order'],
-            'PC_training_core_num': mcmc_other_setting['PC_training_core_num'],
-            'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
+    N_total_samples = mcmc_setting['N_total_mcmc_samples']
+    T_regularization = mcmc_setting['T_regularization']
+    chain_num = mcmc_setting['chain_num']
 
-        accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean, \
-        T_exp_min, T_exp_max, amp_ratio_approx, phase_diff_approx, ss_temp_approx = show_mcmc_results_one_case_P4(
-            df_exp_condition_spreadsheet.iloc[i, :], code_directory,data_directory,
-            df_temperature_list[i], df_amplitude_phase_measurement_list[i], df_sample_cp_rho_alpha, mcmc_setting)
+    rec_name = df_exp_condition['rec_name']
+    R0 = int(df_exp_condition['R0_pixels'])
+    R_analysis = int(df_exp_condition['R_analysis_pixels'])
 
-        T_min_list.append(T_exp_min)
-        T_max_list.append(T_exp_max)
-        accepted_samples_trim_list.append(accepted_samples_trim)
-        alpha_A_posterior_mean_list.append(alpha_A_posterior_mean)
-        alpha_B_posterior_mean_list.append(alpha_B_posterior_mean)
-        sigma_s_posterior_mean_list.append(sigma_s_posterior_mean)
-        T_bias_posterior_mean_list.append(T_bias_posterior_mean)
-        alpha_std_to_mean_list.append(alpha_std_to_mean)
+    gap = int(df_exp_condition['gap_pixels'])
+    emissivity_front = float(df_exp_condition['emissivity_front'])
+    emissivity_back = float(df_exp_condition['emissivity_back'])
+    absorptivity_front = float(df_exp_condition['absorptivity_front'])
+    absorptivity_back = float(df_exp_condition['absorptivity_back'])
+    absorptivity_solar = float(df_exp_condition['absorptivity_solar'])
+    x0 = int(df_exp_condition['x0_pixels'])
+    y0 = int(df_exp_condition['y0_pixels'])
+    N_div = int(df_exp_condition['N_div'])
+    N_Rs = int(df_exp_condition['N_Rs_pixels'])
 
-    df_result_summary = pd.DataFrame(
-        data={'T_min': T_min_list, 'T_max': T_max_list, 'sigma_s': sigma_s_posterior_mean_list,
-              'alpha_A': alpha_A_posterior_mean_list,
-              'alpha_B': alpha_B_posterior_mean_list, 'rec_name': df_exp_condition_spreadsheet['rec_name'],
-              'R0_pixels': df_exp_condition_spreadsheet['R0_pixels'],
-              'V_DC': df_exp_condition_spreadsheet['V_DC'], 'f_heating': df_exp_condition_spreadsheet['f_heating'],
-              'T_bias':T_bias_posterior_mean_list,'alpha_std_to_mean':alpha_std_to_mean_list,'V_AC':df_exp_condition_spreadsheet['V_amplitude']})
+    alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
 
-    return df_result_summary, accepted_samples_trim
+    alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
+
+    mcmc_mode = df_exp_condition['analysis_mode']
+
+    dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
+        int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        N_Rs, int(mcmc_setting['N_total_mcmc_samples']), int(mcmc_setting['T_regularization'] * 1000),
+        x0, y0, mcmc_mode, mcmc_setting['chain_num'], LB_file_name, int(1000 * mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000 * mcmc_setting['sigma_s_prior_range'][1]), int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]), int(mcmc_setting['alpha_B_prior_range'][0] / 100),
+        int(mcmc_setting['alpha_B_prior_range'][1] / 100), N_div, int(mcmc_setting['T_bias_prior_range'][0] / 10),
+        int(mcmc_setting['T_bias_prior_range'][1] / 10))
+
+    accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
+    if mcmc_mode == 'RW_Metropolis' or mcmc_mode == 'RW_Metropolis_P4':
+        n_burn = int(0.3 * len(accepted_samples_array.T[0]))
+    else:
+        n_burn = int(0.05 * len(accepted_samples_array.T[0]))
+
+    accepted_samples_trim = accepted_samples_array[n_burn:]
+
+    Nr = int(df_exp_condition['Nr_pixels'])
+    pr = float(df_exp_condition['sample_radius(m)']) / (Nr - 1)
+    f_heating = float(df_exp_condition['f_heating'])
+    exp_amp_phase_extraction_method = df_exp_condition['exp_amp_phase_extraction_method']
+
+    colors = ['red', 'black', 'green', 'blue', 'orange', 'magenta', 'brown', 'yellow', 'purple', 'cornflowerblue']
+
+    bb = df_exp_condition['anguler_range']
+    bb = bb[1:-1]  # reac_excel read an element as an array
+    index = None
+    angle_range = []
+    while (index != -1):
+        index = bb.find("],[")
+        element = bb[:index]
+        d = element.find(",")
+        element_after_comma = element[d + 1:]
+        element_before_comma = element[element.find("[") + 1:d]
+        # print('Before = {} and after = {}'.format(element_before_comma,element_after_comma))
+        bb = bb[index + 2:]
+        angle_range.append([int(element_before_comma), int(element_after_comma)])
+
+    output_name = rec_name
+    path = data_directory + str(rec_name) + "//"
+    df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Nr,
+                                                                                                           angle_range,
+                                                                                                           pr, path,
+                                                                                                           rec_name,
+                                                                                                           output_name,
+                                                                                                           'MA', 2,
+                                                                                                           code_directory)
+
+    # f, axes = plt.subplots(4, 3, figsize=(26, 24))
+    f, axes = plt.subplots(5, 4, figsize=(30, 38))
+
+    label_font_size = 18
+
+    axes[0, 0].hist(accepted_samples_trim.T[0], bins=15)
+    axes[0, 0].set_xlabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size, fontweight='bold')
+
+    axes[0, 1].hist(accepted_samples_trim.T[1], bins=15)
+    axes[0, 1].set_xlabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size, fontweight='bold')
+
+    axes[0, 2].hist(accepted_samples_trim.T[2], bins=15)
+    axes[0, 2].set_xlabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size, fontweight='bold')
+
+    axes[0, 3].hist(accepted_samples_trim.T[3], bins=15)
+    axes[0, 3].set_xlabel('$T_{bias}$ (K)', fontsize=label_font_size, fontweight='bold')
+
+    axes[1, 0].plot(accepted_samples_trim[:, 0])
+    axes[1, 0].set_ylabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size, fontweight='bold')
+    axes[1, 0].set_xlabel('sample num', fontsize=label_font_size, fontweight='bold')
+
+    axes[1, 1].plot(accepted_samples_trim[:, 1])
+    axes[1, 1].set_ylabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size, fontweight='bold')
+    axes[1, 1].set_xlabel('sample num', fontsize=label_font_size, fontweight='bold')
+
+    axes[1, 2].plot(accepted_samples_trim[:, 2])
+    axes[1, 2].set_ylabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size, fontweight='bold')
+    axes[1, 2].set_xlabel('sample num', fontsize=label_font_size, fontweight='bold')
+
+    axes[1, 3].plot(accepted_samples_trim[:, 3])
+    axes[1, 3].set_ylabel('$T_{bias}$ (K)', fontsize=label_font_size, fontweight='bold')
+    axes[1, 3].set_xlabel('sample num', fontsize=label_font_size, fontweight='bold')
+
+    T_array = np.linspace(df_temperature.iloc[:, R0 + R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 4)
+    alpha_T_array = np.zeros((len(T_array), len(accepted_samples_trim)))
+
+    for i in range(len(accepted_samples_trim)):
+        # alpha_T_array[:,i] = 1/(accepted_samples_trim[i][1]*T_array+accepted_samples_trim[i][2])
+        alpha_T_array[:, i] = 1 / (accepted_samples_trim[i][1] * T_array + accepted_samples_trim[i][2])
+
+    alpha_T_array_mean = alpha_T_array.mean(axis=1)
+    alpha_T_array_std = alpha_T_array.std(axis=1)
+    alpha_std_to_mean_avg = np.mean(alpha_T_array_std / alpha_T_array_mean)
+
+    alpha_reference = 1 / (alpha_r_A_ref * T_array + alpha_r_B_ref)
+
+    # f_posterior_mean_vs_reference = plt.figure(figsize=(7, 5))
+    axes[2, 0].fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std,
+                            alpha_T_array_mean + 3 * alpha_T_array_std,
+                            alpha=0.2)
+    axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='Bayesian posterior distribution')
+    axes[2, 0].errorbar(T_array, alpha_reference, yerr=alpha_reference * 0.05,
+                        label='reference value', capsize=5, elinewidth=2, color='green', fmt='o')
+
+    # plot(T_array, alpha_reference, color='r', label='reference value')
+    # axes[2, 0].set_ylim([0,2.1e-5])
+    axes[2, 0].set_xlabel('Temperature (K)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 0].set_ylabel(r'Thermal diffusivity (m$^2$/s)', fontsize=label_font_size, fontweight='bold')
+    # axes[2, 0].yaxis.set_major_formatter(MathTextSciFormatter("%1.2e"))
+    # axes[2, 0].yaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=True, useOffset=False))
+    axes[2, 0].legend(prop={'weight': 'bold', 'size': 14})
+    alpha_T_array_mean = alpha_T_array.mean(axis=1)
+
+    def residual(params, x, data):
+        alpha_A = params['alpha_A']
+        alpha_B = params['alpha_B']
+
+        model = 1 / (alpha_A * x + alpha_B)
+
+        return model - data
+
+    params = Parameters()
+    params.add('alpha_A', value=1e-7)
+    params.add('alpha_B', value=2e-2)
+
+    out = minimize(residual, params, args=(T_array, alpha_T_array_mean))
+
+    alpha_A_posterior_mean = out.params['alpha_A'].value
+    alpha_B_posterior_mean = out.params['alpha_B'].value
+
+    sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
+    T_bias_posterior_mean = accepted_samples_trim.T[3].mean()
+
+    dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
+        int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
+        int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
+        int(N_Rs), mcmc_setting['PC_order'], x0, y0, LB_file_name, int(1000 * mcmc_setting['sigma_s_prior_range'][0]),
+        int(1000 * mcmc_setting['sigma_s_prior_range'][1]), int(mcmc_setting['alpha_A_prior_range'][0]),
+        int(mcmc_setting['alpha_A_prior_range'][1]), int(mcmc_setting['alpha_B_prior_range'][0] / 100),
+        int(mcmc_setting['alpha_B_prior_range'][1] / 100), N_div, int(mcmc_setting['T_bias_prior_range'][0] / 10),
+        int(mcmc_setting['T_bias_prior_range'][1] / 10))
+
+    amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
+
+    axes[2, 1].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
+                        yerr=df_amplitude_phase_measurement['dA'] * 3,
+                        label='measurement', capsize=5, elinewidth=2, color='red', fmt='o')
+    axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
+                    amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
+                                     T_bias_posterior_mean),
+                    label='simulation', color='black')
+    axes[2, 1].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 1].set_ylabel('Amplitude ratio', fontsize=label_font_size, fontweight='bold')
+    # axes[2, 1].set_ylim([0,2.1e-5])
+    axes[2, 1].legend(prop={'weight': 'bold', 'size': 14})
+
+    # axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
+    #                 label='measurement',color = 'red')
+    axes[2, 2].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
+                        yerr=df_amplitude_phase_measurement['dP'] * 3,
+                        label='measurement', capsize=5, elinewidth=2, color='red', fmt='o')
+    axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
+                    phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
+                                      T_bias_posterior_mean),
+                    label='simulation', color='black')
+    axes[2, 2].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 2].set_ylabel('Phase difference', fontsize=label_font_size, fontweight='bold')
+    axes[2, 2].legend(prop={'weight': 'bold', 'size': 14})
+
+    def residual_temp_shift(params, f_heating, df_temperature, data):
+
+        phi_shift = params[0]
+        #print(df_temperature.shape)
+        temp_shift = df_temperature.query('reltime>{:} and reltime<{:}'.format(phi_shift, phi_shift + 2 / f_heating))
+        #print(temp_shift)
+        T_ss_measured_R0 = temp_shift.iloc[:, R0] - temp_shift.iloc[:, R0].mean()
+        time_measurement = temp_shift['reltime'] - temp_shift['reltime'].min()
+        data_ = data - np.mean(data)
+        #print(time_measurement)
+        f_interp_measurements = interp1d(time_measurement, T_ss_measured_R0, kind='cubic')
+        # x_new = np.range(len(data))
+        time_ss_simulation = np.linspace(0, max(time_measurement), len(data))
+        T_ss_measurement_interpolated = f_interp_measurements(time_ss_simulation)
+
+        # print(-np.sum(T_ss_measurement_interpolated*data_))
+        return -np.sum(T_ss_measurement_interpolated * data_)
+
+    T_ss_RO = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
+                             T_bias_posterior_mean)[:, R0]
+    time_ss_RO = np.linspace(0, 2 / f_heating, len(T_ss_RO))
+    # print(T_ss_RO)
+    out_phi_shift = minimize2(residual_temp_shift, [30], args=(f_heating, df_temperature, T_ss_RO), method='Nelder-Mead')
+
+    phi_shift = out_phi_shift.x[0]
+    #     params = Parameters()
+    #     params.add('phi_shift',value = 20,min = 0, max = 100)
+    #     out_phi_shift = minimize(residual_temp_shift, params, args=(f_heating,T_ss_RO))
+    #     phi_shift = out_phi_shift.params['phi_shift'].value
+
+    #print('The optimized result is {:}'.format(phi_shift))
+
+    # T_ss_RO = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean, T_bias_posterior_mean)[:, R0]
+    # time_ss_RO = np.linspace(0,2/f_heating,len(T_ss_RO))
+    axes[2, 3].plot(time_ss_RO, T_ss_RO, label='simulation R = {:}'.format(R0))
+
+    temp_shift = df_temperature.query('reltime>{:} and reltime<{:}'.format(phi_shift, phi_shift + 2 / f_heating))
+    time_ss_measured_R0 = temp_shift['reltime'] - temp_shift['reltime'].min()
+
+    T_ss_measured_R0 = temp_shift.iloc[:, R0]
+
+    # time_ss_measured_R0 = df_temperature.query('reltime<{:}'.format(2/f_heating))['reltime']
+    # T_ss_measured_R0 = df_temperature.iloc[:len(time_ss_measured_R0), R0]
+    axes[2, 3].plot(time_ss_measured_R0, T_ss_measured_R0, label='measurement R = {:}'.format(R0))
+
+    T_ss_RN = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
+                             T_bias_posterior_mean)[:, R0 + R_analysis]
+    time_ss_RN = np.linspace(0, 2 / f_heating, len(T_ss_RN))
+    axes[2, 3].plot(time_ss_RN, T_ss_RN, label='simulation R = {:}'.format(R0 + R_analysis))
+
+    time_ss_measured_RN = time_ss_measured_R0
+    T_ss_measured_RN = temp_shift.iloc[:, R0 + R_analysis]
+    # time_ss_measured_RN = df_temperature.query('reltime<{:}'.format(2/f_heating))['reltime']
+    # T_ss_measured_RN = df_temperature.iloc[:len(time_ss_measured_RN), R0+R_analysis]
+    axes[2, 3].plot(time_ss_measured_RN, T_ss_measured_RN, label='measurement R = {:}'.format(R0 + R_analysis))
+
+    # axes[2, 3].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
+    axes[2, 3].set_ylabel('Temperature (K)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 3].set_xlabel('Time (s)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 3].legend(prop={'weight': 'bold', 'size': 14})
+
+    def acf(x, length):
+        return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
+
+    def auto_correlation_function(trace, lags):
+        autocorr_trace = acf(trace, lags)
+        return autocorr_trace
+
+    # def plot_auto_correlation(trace, lags):
+
+    lags = 100
+
+    autocorr_trace_sigma = auto_correlation_function(accepted_samples_trim[:, 0], lags)
+    axes[3, 0].plot(autocorr_trace_sigma)
+    axes[3, 0].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 0].set_ylabel('sigma_s', fontsize=label_font_size)
+
+    autocorr_trace_alpha_A = auto_correlation_function(accepted_samples_trim[:, 1], lags)
+    axes[3, 1].plot(autocorr_trace_alpha_A)
+    axes[3, 1].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 1].set_ylabel('alpha_A', fontsize=label_font_size)
+
+    autocorr_trace_alpha_B = auto_correlation_function(accepted_samples_trim[:, 2], lags)
+    axes[3, 2].plot(autocorr_trace_alpha_B)
+    axes[3, 2].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 2].set_ylabel('alpha_B', fontsize=label_font_size)
+
+    autocorr_T_bias = auto_correlation_function(accepted_samples_trim[:, 3], lags)
+    axes[3, 3].plot(autocorr_T_bias)
+    axes[3, 3].set_xlabel('lags N', fontsize=label_font_size)
+    axes[3, 3].set_ylabel('T_bias', fontsize=label_font_size)
+
+    df_temperature_angle_list = []
+    df_amp_phase_angle_list = []
+    for j, angle in enumerate(angle_range):
+        # note radial_temperature_average_disk_sample automatically checks if a dump file exist
+        df_temperature_ = df_temperature_list_all_ranges[j]
+        df_amplitude_phase_measurement_ = batch_process_horizontal_lines(df_temperature_, f_heating, R0, gap,
+                                                                         R_analysis,
+                                                                         exp_amp_phase_extraction_method)
+        df_temperature_angle_list.append(df_temperature_)
+        df_amp_phase_angle_list.append(df_amplitude_phase_measurement_)
+
+        axes[4, 2].scatter(df_amplitude_phase_measurement_['r'],
+                           df_amplitude_phase_measurement_['amp_ratio'], facecolors='none',
+                           s=60, linewidths=2, edgecolor=colors[j],
+                           label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+    axes[4, 2].set_xlabel('R (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 2].set_ylabel('Amplitude Ratio', fontsize=label_font_size, fontweight='bold')
+    axes[4, 2].legend(prop={'weight': 'bold', 'size': 12})
+
+    for j, angle in enumerate(angle_range):
+        df_temperature_ = df_temperature_angle_list[j]
+        df_amplitude_phase_measurement_ = df_amp_phase_angle_list[j]
+        axes[4, 3].scatter(df_amplitude_phase_measurement_['r'],
+                           df_amplitude_phase_measurement_['phase_diff'], facecolors='none',
+                           s=60, linewidths=2, edgecolor=colors[j],
+                           label=str(angle[0]) + ' to ' + str(angle[1]) + ' Degs')
+
+    axes[4, 3].set_xlabel('R (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 3].set_ylabel('Phase difference (rad)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 3].legend(prop={'weight': 'bold', 'size': 12})
+
+    rep_csv_dump_path = code_directory + "temperature cache dump//" + rec_name + '_rep_dump'
+    # rec_name
+    if (os.path.isfile(rep_csv_dump_path)):  # First check if a dump file exist:
+        print('Found previous dump file for representative temperature contour plots:' + rep_csv_dump_path)
+        temp_dump = pickle.load(open(rep_csv_dump_path, 'rb'))
+        df_first_frame = temp_dump[0]
+        df_mid_frame = temp_dump[1]
+        frame_num_first = temp_dump[2]
+        frame_num_mid = temp_dump[3]
+
+    else:  # If not we obtain the dump file, note the dump file is averaged radial temperature
+
+        file_name_0 = [path + x for x in os.listdir(path)][0]
+        n0 = file_name_0.rfind('//')
+        n1 = file_name_0.rfind('.csv')
+        frame_num_first = file_name_0[n0 + 2:n1]
+
+        df_first_frame = pd.read_csv(file_name_0, skiprows=5, header=None)
+
+        N_mid = int(len([path + x for x in os.listdir(path)]) / 3)
+        # N_mid = 20
+        file_name_1 = [path + x for x in os.listdir(path)][N_mid]
+        n2 = file_name_1.rfind('//')
+        n3 = file_name_1.rfind('.csv')
+        frame_num_mid = file_name_1[n2 + 2:n3]
+
+        df_mid_frame = pd.read_csv(file_name_1, skiprows=5, header=None)
+
+        temp_dump = [df_first_frame, df_mid_frame, frame_num_first, frame_num_mid]
+
+        pickle.dump(temp_dump, open(rep_csv_dump_path, "wb"))
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_first_frame.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    # ax = plt.gca()
+    CS = axes[4, 0].contour(X, Y, Z, 18)
+    axes[4, 0].plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    axes[4, 0].plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    R_angle_show = R0 + R_analysis
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01 / pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+    axes[4, 0].invert_yaxis()
+    axes[4, 0].clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    axes[4, 0].add_artist(circle1)
+    axes[4, 0].add_artist(circle2)
+    axes[4, 0].add_artist(circle3)
+
+    axes[4, 0].set_xlabel('x (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 0].set_ylabel('y (pixels)', fontsize=label_font_size, fontweight='bold')
+    # axes[4, 2].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        axes[4, 0].plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)],
+                        [y0, y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
+
+    xmin = x0 - R0 - R_analysis
+    xmax = x0 + R0 + R_analysis
+    ymin = y0 - R0 - R_analysis
+    ymax = y0 + R0 + R_analysis
+    Z = np.array(df_mid_frame.iloc[ymin:ymax, xmin:xmax])
+    x = np.arange(xmin, xmax, 1)
+    y = np.arange(ymin, ymax, 1)
+    X, Y = np.meshgrid(x, y)
+
+    # mid = int(np.shape(Z)[1] / 2)
+    x3 = min(R0 + 10, R0 + R_analysis - 20)
+
+    manual_locations = [(x0 - R0 + 15, y0 - R0 + 15), (x0 - R0, y0 - R0), (x0 - x3, y0 - x3)]
+    # fig, ax = plt.subplots(figsize=(6, 6))
+    # ax = plt.gca()
+    CS = axes[4, 1].contour(X, Y, Z, 18)
+    axes[4, 1].plot([xmin, xmax], [y0, y0], ls='-.', color='k', lw=2)  # add a horizontal line cross x0,y0
+    axes[4, 1].plot([x0, x0], [ymin, ymax], ls='-.', color='k', lw=2)  # add a vertical line cross x0,y0
+
+    R_angle_show = R0 + R_analysis
+
+    circle1 = plt.Circle((x0, y0), R0, edgecolor='r', fill=False, linewidth=3, linestyle='-.')
+    circle2 = plt.Circle((x0, y0), R0 + R_analysis, edgecolor='k', fill=False, linewidth=3, linestyle='-.')
+
+    circle3 = plt.Circle((x0, y0), int(0.01 / pr), edgecolor='black', fill=False, linewidth=3, linestyle='dotted')
+
+    axes[4, 1].invert_yaxis()
+    axes[4, 1].clabel(CS, inline=1, fontsize=12, manual=manual_locations)
+    axes[4, 1].add_artist(circle1)
+    axes[4, 1].add_artist(circle2)
+    axes[4, 1].add_artist(circle3)
+
+    axes[4, 1].set_xlabel('x (pixels)', fontsize=label_font_size, fontweight='bold')
+    axes[4, 1].set_ylabel('y (pixels)', fontsize=label_font_size, fontweight='bold')
+    # axes[4, 3].set_title('x0 = {}, y0 = {}, R0 = {}'.format(x0, y0, R0), fontsize=12, fontweight='bold')
+
+    for j, angle in enumerate(angle_range):
+        axes[4, 1].plot([x0, x0 + R_angle_show * np.cos(angle[0] * np.pi / 180)],
+                        [y0, y0 + R_angle_show * np.sin(angle[0] * np.pi / 180)], ls='-.', color='blue', lw=2)
+
+    for i in range(5):
+        for j in range(4):
+            for tick in axes[i, j].xaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=12)
+                tick.label.set_fontweight('bold')
+            for tick in axes[i, j].yaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=12)
+                tick.label.set_fontweight('bold')
+    f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,
+                                                                                                             float(
+                                                                                                                 df_exp_condition[
+                                                                                                                     'f_heating']),
+                                                                                                             float(
+                                                                                                                 df_exp_condition[
+                                                                                                                     'V_DC']),
+                                                                                                             R0,
+                                                                                                             R_analysis,
+                                                                                                             int(
+                                                                                                                 100 * float(
+                                                                                                                     df_exp_condition[
+                                                                                                                         'emissivity_front'])),
+                                                                                                             int(
+                                                                                                                 100 * float(
+                                                                                                                     df_exp_condition[
+                                                                                                                         'emissivity_back'])),
+                                                                                                             int(
+                                                                                                                 100 * float(
+                                                                                                                     df_exp_condition[
+                                                                                                                         'absorptivity_solar'])),
+                                                                                                             x0, y0),
+               y=0.91, fontsize=16)
+    # plt.show()
+
+    # print("------------------------------------Happy 2021!------------------------------------")
+    print(
+        rec_name + " is shown here, and with mean sigma_s = {:.2e}, alpha_A = {:.2e}, alpha_B = {:.2e}, T_bias = {:.2e}".format(
+            accepted_samples_array.T[0].mean(), accepted_samples_array.T[1].mean(), accepted_samples_array.T[2].mean(),
+            accepted_samples_array.T[3].mean()))
+    # return f
+
+    return accepted_samples_trim, alpha_A_posterior_mean, alpha_B_posterior_mean, sigma_s_posterior_mean, T_bias_posterior_mean, alpha_std_to_mean_avg, np.min(
+        T_array), np.max(T_array), amp_ratio_approx, phase_diff_approx, ss_temp_approx
 
 
 def mcmc_result_vs_reference_visualization(df_result_summary, f_heating, R0_max, mcmc_method, alpha_A, alpha_B,ylim):
@@ -6323,17 +6888,17 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
             axes[1, i].scatter(df_main_effect_relative['r'], df_main_effect_relative[parameter_name],
                                label=legend_temp)
 
-        axes[0, i].set_xlabel('R(node #)', fontsize=12, fontweight='bold')
+        axes[0, i].set_xlabel('R(pixels)', fontsize=12, fontweight='bold')
         axes[0, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
-        axes[0, i].set_xlim([60,100])
+        axes[0, i].set_xlim([61,73])
 
-        axes[1, i].set_xlabel('R(node #)', fontsize=12, fontweight='bold')
+        axes[1, i].set_xlabel('R(pixels)', fontsize=12, fontweight='bold')
         axes[1, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
 
         if i == 0:
             axes[0, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
             axes[1, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
-            axes[1, i].set_xlim([60, 100])
+            axes[1, i].set_xlim([61, 73])
         axes[0, i].legend(prop={'weight': 'bold', 'size': 12})
         axes[1, i].legend(prop={'weight': 'bold', 'size': 12})
 
