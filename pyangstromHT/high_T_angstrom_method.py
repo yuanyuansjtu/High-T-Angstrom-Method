@@ -1956,7 +1956,7 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
                                                           df_solar_simulator_VQ,
                                                           sigma_df, code_directory, df_view_factor, df_LB_details_all):
 
-    Max_iter = 100000
+    Max_iter = 10000
 
     T_LBW = float(df_view_factor['T_LBW_C'][0]) + 273.15
 
@@ -2105,7 +2105,11 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
                         DN - 2 * CN * dr * sigma_sb * emissivity_back / k_p_1[-2]) * T[
                                p + 1, -2] ** 4 + EN + FN + 2 * dr * sigma_sb * absorptivity_back * T_LBW ** 4 * CN / \
                            k_p_1[-2]
-
+            if p==0:
+                df_Jac = pd.DataFrame(data = Jac)
+                df_Jac.to_csv('Jacobian_diagnostic_1D.csv')
+                df_F_matrix = pd.DataFrame(data = F_matrix)
+                df_F_matrix.to_csv('F_matrix_diagonstic_1D.csv')
             # T[p+1,-2] = -(AN+CN)/BN*T[p+1,-3]-(DN - 2*CN*dr*sigma_sb*emissivity_back/k_p_1[-2])/BN*T[p+1,-2]**4 - EN/BN - FN/BN - 2*dr*sigma_sb*absorptivity_back*T_LBW**4*CN/BN/k_p_1[-2] + 1/BN*T[p,-2]
 
             # delta_T = -np.dot(inv(Jac),F_matrix)
@@ -2153,6 +2157,608 @@ def finite_difference_implicit_variable_properties(sample_information, vacuum_ch
 
 
 
+
+def finite_difference_2D_nonvectorized_implicit_variable_properties(sample_information, vacuum_chamber_setting,
+                                                          solar_simulator_settings,
+                                                          light_source_property, numerical_simulation_setting,
+                                                          df_solar_simulator_VQ,
+                                                          sigma_df, code_directory, df_view_factor, df_LB_details_all):
+
+    Max_iter = 1000
+
+    T_LBW = float(df_view_factor['T_LBW_C'][0]) + 273.15
+
+    R = sample_information['R']  # sample radius
+    Nr = int(numerical_simulation_setting['Nr_node'])  # number of discretization along radial direction
+    Nz = int(numerical_simulation_setting['Nz_node']) # number of discretization along radial direction
+
+    t_z = sample_information['t_z']  # sample thickness
+
+    dr = R / (Nr - 1)
+    dz = t_z/(Nz-1)
+
+    r = np.arange(Nr)
+    rm = r * dr
+
+    rho = sample_information['rho']
+    cp_0 = sample_information['cp_const']  # Cp = cp_const + cp_c1*T + cp_c2/T + cp_c3/T**2, T unit in K
+    cp_1 = sample_information['cp_c1']
+    cp_2 = sample_information['cp_c2']
+    cp_3 = sample_information['cp_c3']
+
+    R0 = vacuum_chamber_setting['R0_node']
+
+    alpha_r_A = float(sample_information['alpha_r_A'])
+    alpha_r_B = float(sample_information['alpha_r_B'])
+
+    T_initial = sample_information['T_initial']  # unit in K
+    # k = alpha*rho*cp
+
+    f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
+    N_cycle = numerical_simulation_setting['N_cycle']
+    N_stable_cycle_output = numerical_simulation_setting['N_stable_cycle_output']
+
+    simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
+
+    emissivity_front = sample_information['emissivity_front']  # assumed to be constant
+    emissivity_back = sample_information['emissivity_back']  # assumed to be constant
+
+    absorptivity_solar = sample_information['absorptivity_solar']
+
+    absorptivity_front = sample_information['absorptivity_front']  # assumed to be constant
+    absorptivity_back = sample_information['absorptivity_back']  # assumed to be constant
+
+    sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
+
+    Cm_LB, qm_LB, Cm_back, T_LB_mean_C = radiation_absorption_view_factor_calculations_network(code_directory, rm, dr,
+                                                                                   sample_information,
+                                                                                   solar_simulator_settings,
+                                                                                   vacuum_chamber_setting,
+                                                                                   numerical_simulation_setting,
+                                                                                   df_view_factor, df_LB_details_all)
+
+
+    dt = 1 / f_heating / numerical_simulation_setting['simulated_num_data_per_cycle']
+
+    t_total = 1 / f_heating * N_cycle  # total simulation time
+
+    Nt = int(t_total / dt)  # total number of simulation time step
+    time_simulation = dt * np.arange(Nt)
+
+    T = T_initial * np.ones((Nt, Nr*Nz))
+
+    q_solar = absorptivity_solar*light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                       solar_simulator_settings, vacuum_chamber_setting,
+                                                       light_source_property,
+                                                       df_solar_simulator_VQ, sigma_df)
+
+    #r_lb_window,lb_window = pd.read_csv('LB_window_function.csv')
+    #f_lb_window = interp1d(r_lb_window,lb_window)
+    #lb_window_function = f_lb_window(np.arange(Nr))
+    #q_solar = q_solar*lb_window_function
+
+    T_temp = np.zeros(Nr)
+    N_steady_count = 0
+    time_index = Nt - 1
+    N_one_cycle = int(Nt / N_cycle)
+
+    C_surr = qm_LB + Cm_back
+
+    Jac = np.zeros((Nr*Nz, Nr*Nz))
+    F_matrix = np.zeros(Nr*Nz)
+
+    for p in tqdm(range(Nt - 1)):  # p indicate time step
+
+        c_p_1 = cp_0 + cp_1 * T[p, :] + cp_2 / T[p, :] + cp_3 / T[p, :] ** 2
+        alpha_p_1 = 1 / (alpha_r_A * T[p, :] + alpha_r_B)
+        k_p_1 = c_p_1 * alpha_p_1 * rho
+
+        for iter in range(Max_iter):
+            # print(c_p_1)
+
+            # top left corner -- consistent with derivation
+            A0_0 = dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0]) - dt/(2*dr*dr*rho*c_p_1[0])*k_p_1[0]
+            B0_0 = -(dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[1]+2*k_p_1[0]+k_p_1[0])+dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+2*k_p_1[0]+k_p_1[Nr])+1)
+            C0_0 = dt*k_p_1[0]/(2*dr*dr*rho*c_p_1[0]) + dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0])
+            D0_0 = dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0])
+            E0_0 = dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[Nr])
+
+            Jac[0,0] = B0_0 - 8*dz*Cm_LB[0]*sigma_sb*D0_0/(k_p_1[0]*2*np.pi*dr*dr)*T[p+1,0]**3
+            Jac[0,1] = A0_0 + C0_0
+            Jac[0,Nr] = D0_0 + E0_0
+
+            F_matrix[0] = T[p,0] + (A0_0+C0_0)*T[p+1,1] + B0_0*T[p+1,0] - 2*dz*Cm_LB[0]*sigma_sb*D0_0/(k_p_1[0]*2*np.pi*dr*dr)*T[p+1,0]**4 + (D0_0+E0_0)*T[p+1,Nr] +\
+                          (2*dz/(k_p_1[0]*2*np.pi*dr*dr)*qm_LB[0] + 2*dz*q_solar[p,0]/k_p_1[0])*D0_0
+
+            #top middle region -- consistent with derivation
+            for i in np.arange(1,Nr-1,1):
+                Am_0 = dt/(2*dr**2*rho*c_p_1[i])*(k_p_1[i-1]+k_p_1[i]) - dt/(2*rm[i]*dr*rho*c_p_1[i])*k_p_1[i]
+
+                T_p_ghost = T[p+1,i+Nr] - 2*dz*Cm_LB[i]*sigma_sb/(k_p_1[i]*2*np.pi*rm[i]*dr)*T[p+1,i]**4 + 2*dz/(k_p_1[i]*2*np.pi*rm[i]*dr)*qm_LB[i] + 2*dz/k_p_1[i]*q_solar[p,i]
+                k_p_1_ghost = rho*(cp_0 + cp_1 * T_p_ghost + cp_2 / T_p_ghost + cp_3 / T_p_ghost ** 2)*(1 / (alpha_r_A * T_p_ghost + alpha_r_B))
+                Bm_0 = -(dt/(2*dr**2*rho*c_p_1[i])*(k_p_1[i+1]+2*k_p_1[i]+k_p_1[i-1])+dt/(2*dz**2*rho*c_p_1[i])*(k_p_1_ghost+2*k_p_1[i]+k_p_1[Nr+i])+1)
+                Cm_0 = dt * k_p_1[i] / (2 * rm[i] * dr * rho * c_p_1[i]) + dt / (2 * dr ** 2 * rho * c_p_1[i]) * (k_p_1[i-1] + k_p_1[i])
+                Dm_0 = dt / (2 * dz ** 2 * rho * c_p_1[i]) * (k_p_1_ghost + k_p_1[i])
+                Em_0 = dt/(2*dz**2*rho*c_p_1[i])*(k_p_1[i]+k_p_1[Nr+i])
+
+                Jac[i,i-1] = Am_0
+                Jac[i,i] = Bm_0 - 8*dz*Cm_LB[i]*sigma_sb/(k_p_1[i]*2*np.pi*rm[i]*dr)*Dm_0*T[p+1,i]**3
+                Jac[i,i+1] = Cm_0
+                Jac[i, Nr+i] = Dm_0 + Em_0
+
+                F_matrix[i] = T[p,i] + T[p+1,i-1]*Am_0 + T[p+1,i]*Bm_0 - 2*dz*Cm_LB[i]*sigma_sb/(k_p_1[i]*2*np.pi*rm[i]*dr)*Dm_0*T[p+1,i]**4 + \
+                              Cm_0*T[p+1,i+1]+ T[p+1,Nr+i]*(Dm_0+Em_0) + (2*dz/(k_p_1[i]*2*np.pi*rm[i]*dr)*qm_LB[i] + 2*dz/(k_p_1[i])*q_solar[p,i])*Dm_0
+
+            #top right corner --consistent with derivation
+            AM_0 = dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1-1]+k_p_1[Nr-1]) - dt/(2*dr*dr*rho*c_p_1[Nr-1])*k_p_1[Nr-1]
+            BM_0 = -(dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+2*k_p_1[Nr-1]+k_p_1[Nr-1-1])+dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1+Nr]+2*k_p_1[Nr-1]+k_p_1[Nr-1])+1)
+            CM_0 = dt*k_p_1[Nr-1]/(2*rm[Nr-1]*dr*rho*c_p_1[Nr-1]) + dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1-1]+k_p_1[Nr-1])
+            DM_0 = dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+k_p_1[Nr-1])
+            EM_0 = dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+k_p_1[Nr-1+Nr])
+
+            Jac[Nr-1,Nr-1-1] = AM_0 + CM_0
+            Jac[Nr-1,Nr-1] = BM_0 - 8*dz*Cm_LB[Nr-1]*sigma_sb*DM_0/(k_p_1[Nr-1]*2*np.pi*rm[Nr-1]*dr)*T[p+1,Nr-1]**3 - 8*dr*sigma_sb*emissivity_front/k_p_1[Nr-1]*CM_0*T[p+1,Nr-1]**3
+            Jac[Nr-1,2*Nr-1] = DM_0 + EM_0
+
+            F_matrix[Nr-1] = T[p,Nr-1] + T[p+1,Nr-1-1]*(AM_0 + CM_0) + T[p+1,Nr-1]*BM_0 - 2*dr*sigma_sb*emissivity_front/k_p_1[Nr-1]*CM_0*T[p+1,Nr-1]**4 -2*dz*Cm_LB[Nr-1]*sigma_sb/(
+                    k_p_1[Nr-1]*rm[Nr-1]*dr*2*np.pi)*DM_0*T[p+1,Nr-1]**4 + T[p+1,2*Nr-1]*(EM_0+DM_0) + 2*dz/(k_p_1[Nr-1]*rm[Nr-1]*dr*2*np.pi)*qm_LB[Nr-1] + 2*dz/k_p_1[Nr-1]*q_solar[p,Nr-1]
+
+            #left center edge--consistent with derivation
+            for n in np.arange(1,Nz-1,1):
+                A0_n = dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*n]) - dt/(2*dr*dr*rho*c_p_1[Nr*n])*k_p_1[Nr*n]
+                B0_n = -(dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n+1]+2*k_p_1[Nr*n]+k_p_1[Nr*n])+dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*(n-1)]+2*k_p_1[Nr*n]+k_p_1[Nr*(n+1)])+1)
+                C0_n = dt*k_p_1[Nr*n]/(2*dr*dr*rho*c_p_1[Nr*n]) + dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*n])
+                D0_n = dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*(n-1)]+k_p_1[Nr*n])
+                E0_n = dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*(n+1)])
+
+                Jac[Nr*n,Nr*n] = B0_n
+                Jac[Nr*n,Nr*n+1] = A0_n + C0_n
+                Jac[Nr*n,Nr*(n-1)] = D0_n
+                Jac[Nr*n,Nr*(n+1)] = E0_n
+
+                F_matrix[Nr*n] = T[p,Nr*n] + T[p+1,Nr*n]*B0_n + T[p+1,Nr*n+1]*(C0_n+A0_n) + T[p+1,Nr*(n-1)]*D0_n + T[p+1,Nr*(n+1)]*E0_n
+
+            #considering the body area -- consistent with derivation
+            for n in np.arange(1,Nz-1,1): # row, indicating n in thickness direction
+                for m in np.arange(1,Nr-1,1): # column, indicating m in radial direction
+                    Am_n = dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+m]) * (k_p_1[Nr * n+m-1] + k_p_1[Nr * n+m]) - dt / (
+                                2 * rm[m] * dr * rho * c_p_1[Nr * n+m]) * k_p_1[Nr * n+m]
+                    Bm_n = -(dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+m]) * (
+                                k_p_1[Nr * n+m+1] + 2 * k_p_1[Nr * n+m] + k_p_1[Nr * n+m-1]) + dt / (
+                                         2 * dz ** 2 * rho * c_p_1[Nr * n+m]) * (
+                                         k_p_1[Nr * (n+1)+m] + 2 * k_p_1[Nr * n+m] + k_p_1[Nr * (n-1)+m]) + 1)
+                    Cm_n = dt * k_p_1[Nr * n+m] / (2 * rm[m] * dr * rho * c_p_1[Nr * n+m]) + dt / (
+                                2 * dr ** 2 * rho * c_p_1[Nr * n+m]) * (k_p_1[Nr * n+m-1] + k_p_1[Nr * n+m])
+                    Dm_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+m]) * (k_p_1[Nr * (n-1)+m] + k_p_1[Nr * n+m])
+                    Em_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+m]) * (k_p_1[Nr * n+m] + k_p_1[Nr * (n+1)+m])
+
+                    Jac[Nr * n+m, Nr * n+m-1] = Am_n
+                    Jac[Nr * n+m, Nr * n+m] = Bm_n
+                    Jac[Nr * n+m, Nr * n+m+1] = Cm_n
+                    Jac[Nr * n+m, Nr * (n-1)+m] = Dm_n
+                    Jac[Nr * n + m, Nr * (n + 1) + m] = Em_n
+
+                    F_matrix[Nr * n + m] = T[p,Nr * n + m] + T[p+1,Nr * n + m-1]*Am_n + T[p+1,Nr * n + m]*Bm_n + T[p+1,Nr * n + m+1]*Cm_n + T[p+1,Nr * (n-1) + m]*Dm_n + T[p+1,Nr * (n+1) + m]*Em_n
+
+            #right edge--consistent with derivation
+            for n in np.arange(1,Nz-1,1):
+                AM_n = dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * n+Nr-1-1] + k_p_1[Nr * n+Nr-1]) - dt / (
+                                2 * rm[Nr-1] * dr * rho * c_p_1[Nr * n+Nr-1]) * k_p_1[Nr * n+Nr-1]
+                BM_n = -(dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (
+                                k_p_1[Nr * n+Nr-1] + 2 * k_p_1[Nr * n+Nr-1] + k_p_1[Nr * n+Nr-1-1]) + dt / (
+                                         2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * (n-1)+Nr-1] + 2 * k_p_1[Nr * n+Nr-1] + k_p_1[Nr * (n+1)+Nr-1]) + 1)
+                CM_n = dt * k_p_1[Nr * n + Nr-1] / (2 * rm[Nr-1] * dr * rho * c_p_1[Nr * n + Nr-1]) + dt / (
+                        2 * dr ** 2 * rho * c_p_1[Nr * n + Nr-1]) * (k_p_1[Nr * n + Nr-1 - 1] + k_p_1[Nr * n + Nr-1])
+                DM_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * (n-1)+Nr-1] + k_p_1[Nr * n+Nr-1])
+                EM_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * n+Nr-1] + k_p_1[Nr * (n+1)+Nr-1])
+
+                Jac[Nr * n+Nr-1,Nr * n+Nr-1-1] = AM_n + CM_n
+                Jac[Nr * n+Nr-1,Nr * n+Nr-1] = BM_n - 8*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T[p+1,Nr * n+Nr-1]**3
+                Jac[Nr * n+Nr-1,Nr * (n-1)+Nr-1] = DM_n
+                Jac[Nr * n+Nr-1,Nr * (n+1)+Nr-1] = Em_n
+
+                F_matrix[Nr * n+Nr-1] = T[p,Nr * n+Nr-1] + T[p+1,Nr * n+Nr-1-1]*(AM_n+CM_n) + T[p+1,Nr * n+Nr-1]*BM_n - 2*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T[p+1,Nr * n+Nr-1]**4 + \
+                    T[p+1,Nr * (n-1)+Nr-1]*DM_n + T[p+1,Nr * (n+1)+Nr-1]*EM_n + 2*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T_LBW**4
+
+
+            #bottom left corner-consistent with derivation
+            A0_N = dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)]) - dt/(2*dr*dr*rho*c_p_1[Nr*(Nz-1)])*k_p_1[Nr*(Nz-1)]
+            B0_N = -(dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)+1]+2*k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)])+dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+2*k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1-1)])+1)
+            C0_N = dt*k_p_1[Nr*(Nz-1)]/(2*dr*dr*rho*c_p_1[Nr*(Nz-1)]) + dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)-1]+k_p_1[Nr*(Nz-1)])
+            D0_N = dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1-1)]+k_p_1[Nr*(Nz-1)])
+            E0_N = dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)])
+
+            Jac[Nr*(Nz-1),Nr*(Nz-1)] = B0_N - 8*dz*sigma_sb*emissivity_back*E0_N/k_p_1[Nr*(Nz-1)]*T[p+1,Nr*(Nz-1)]**3
+            Jac[Nr*(Nz-1),Nr*(Nz-1)+1] = A0_N + C0_N
+            Jac[Nr*(Nz-1),Nr*(Nz-1-1)] = D0_N + E0_N
+
+            F_matrix[Nr*(Nz-1)] = T[p,Nr*(Nz-1)] + T[p+1,Nr*(Nz-1)+1]*A0_N + T[p+1,Nr*(Nz-1)]*B0_N -2*dz*sigma_sb*emissivity_back*E0_N/k_p_1[Nr*(Nz-1)]*T[p+1,Nr*(Nz-1)]**4 + \
+                T[p+1,Nr*(Nz-1)+1]*C0_N + T[p+1,Nr*(Nz-1-1)]*(D0_N + E0_N) + 2*dz*Cm_back[0]*E0_N/(k_p_1[Nr*(Nz-1)]*dr*dr*np.pi*2)
+
+            #bottom center region - consistent with derivation
+            for i in np.arange(1,Nr-1,1):
+                Am_N = dt/(2*dr**2*rho*c_p_1[i + (Nz-1)*Nr])*(k_p_1[i + (Nz-1)*Nr-1]+k_p_1[i + (Nz-1)*Nr]) - dt/(2*rm[i]*dr*rho*c_p_1[i + (Nz-1)*Nr])*k_p_1[i + (Nz-1)*Nr]
+
+                T_p_ghost = T[p+1,i + (Nz-1-1)*Nr] - 2*dz*emissivity_back*sigma_sb/k_p_1[i + (Nz-1)*Nr]*T[p+1,i + (Nz-1)*Nr]**4 + 2*dz/(rm[i]*dr*np.pi*2*k_p_1[i + (Nz-1)*Nr])*Cm_back[i]
+                k_p_1_ghost = rho*(cp_0 + cp_1 * T_p_ghost + cp_2 / T_p_ghost + cp_3 / T_p_ghost ** 2)*(1 / (alpha_r_A * T_p_ghost + alpha_r_B))
+
+                Bm_N = -(dt/(2*dr**2*rho*c_p_1[i + (Nz-1)*Nr])*(k_p_1[i + (Nz-1)*Nr+1]+2*k_p_1[i + (Nz-1)*Nr]+k_p_1[i + (Nz-1)*Nr-1])+dt/(2*dz**2*rho*c_p_1[i + (Nz-1)*Nr])*(k_p_1_ghost+2*k_p_1[i + (Nz-1)*Nr]+k_p_1[i + (Nz-1-1)*Nr])+1)
+                Cm_N = dt * k_p_1[i + (Nz-1)*Nr] / (2 * rm[i] * dr * rho * c_p_1[i + (Nz-1)*Nr]) + dt / (2 * dr ** 2 * rho * c_p_1[i + (Nz-1)*Nr]) * (k_p_1[i + (Nz-1)*Nr-1] + k_p_1[i + (Nz-1)*Nr])
+                Dm_N = dt / (2 * dz ** 2 * rho * c_p_1[i + (Nz-1)*Nr]) * (k_p_1[i + (Nz-1-1)*Nr] + k_p_1[i + (Nz-1)*Nr])
+                Em_N = dt/(2*dz**2*rho*c_p_1[i + (Nz-1)*Nr])*(k_p_1[i + (Nz-1)*Nr]+k_p_1_ghost)
+
+                Jac[i + (Nz-1)*Nr,i + (Nz-1)*Nr-1] = Am_N
+                Jac[i + (Nz-1)*Nr,i + (Nz-1)*Nr] = Bm_N - 8*dz*sigma_sb*emissivity_back*Em_N/k_p_1[i + (Nz-1)*Nr]*T[p+1,i + (Nz-1)*Nr]**3
+                Jac[i + (Nz-1)*Nr, i + (Nz-1)*Nr+1] = Cm_N
+                Jac[i + (Nz-1)*Nr, i + (Nz-1-1)*Nr] = Dm_N + Em_N
+
+                F_matrix[i + (Nz-1)*Nr] = T[p,i + (Nz-1)*Nr] + T[p+1,i + (Nz-1)*Nr-1]*Am_N + T[p+1,i + (Nz-1)*Nr]*Bm_N - 2*dz*emissivity_back*sigma_sb/k_p_1[i + (Nz-1)*Nr]*Em_N*T[p+1,i + (Nz-1)*Nr]**4 + T[p+1, i + (Nz-1)*Nr+1]*Cm_N +\
+                    T[p+1,i + (Nz-1-1)*Nr]*(Dm_N + Em_N) + 2*dz*Cm_back[i]*Em_N/(rm[i]*dr*2*np.pi*k_p_1[i + (Nz-1)*Nr])
+
+            #bottom right corner
+            AM_N = dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1-1]+k_p_1[Nr*Nz-1]) - dt/(2*rm[Nr-1]*dr*rho*c_p_1[Nr*Nz-1])*k_p_1[Nr*Nz-1]
+            BM_N = -(dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+2*k_p_1[Nr*Nz-1]+k_p_1[Nr*Nz-1-1])+dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+2*k_p_1[Nr*Nz-1]+k_p_1[Nr*(Nz-1)-1])+1)
+            CM_N = dt*k_p_1[Nr*Nz-1]/(2*rm[Nr-1]*dr*rho*c_p_1[Nr*Nz-1]) + dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1-1]+k_p_1[Nr*Nz-1])
+            DM_N = dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*(Nz-1)-1]+k_p_1[Nr*Nz-1])
+            EM_N = dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+k_p_1[Nr*Nz-1])
+
+            Jac[Nr*Nz-1,Nr*Nz-1-1] = AM_N + CM_N
+            Jac[Nr*Nz-1,Nr*Nz-1] = BM_N - 8*dr*emissivity_back*sigma_sb*CM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**3 -8*dz*emissivity_back*sigma_sb*EM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**3
+            Jac[Nr*Nz-1,Nr*(Nz-1)-1] = DM_N + EM_N
+
+            F_matrix[Nr*Nz-1] = T[p,Nr*Nz-1] + T[p+1,Nr*Nz-1-1]*(AM_N+CM_N) + T[p+1,Nr*Nz-1]*BM_N - 2*dr*emissivity_back*sigma_sb*CM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**4 -2*dz*emissivity_back*sigma_sb*EM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**4 +\
+                T[p+1,Nr*(Nz-1)-1]*(DM_N + EM_N) + 2*Cm_back[Nr-1]*dz/(rm[Nr-1]*2*np.pi*dr*k_p_1[Nr*Nz-1])*EM_N
+
+            if p==0:
+                df_Jac = pd.DataFrame(data = Jac)
+                df_Jac.to_csv('Jacobian_diagnostic.csv')
+            delta_T = np.linalg.solve(Jac, -F_matrix)
+            T[p + 1, :] = T[p + 1, :] + delta_T
+
+
+            err = np.max(abs(delta_T))
+
+            if err < 1e-11:
+                if p%20==0:
+                    pass
+                    #rint("stable time reach at iter = {:.0f}, with error = {:.2E} and first node temperature = {:.1E}".format(iter, err, T[p + 1, 0]))
+                break
+            if iter == Max_iter - 1:
+                print('Convergence has not yet achieved! Increase iterations! Tempearture = {:.1E}'.format(T[p + 1, 1]))
+
+        if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
+            A_max = np.max(T[p - N_one_cycle:p, (Nz-1)*Nr:], axis=0)
+            A_min = np.min(T[p - N_one_cycle:p, (Nz-1)*Nr:], axis=0)
+            if np.max(np.abs((T_temp[:] - T[p+1, (Nz-1)*Nr:]) / (A_max - A_min))) < 1e-3:
+                N_steady_count += 1
+                if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
+                    time_index = p
+                    print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                        int(p / N_one_cycle)))
+                    break
+
+            T_temp[:] = T[p+1, (Nz-1)*Nr:]
+
+        if (p == Nt - 2) and (N_steady_count < N_stable_cycle_output):
+            time_index = p
+            print("Error! No stable temperature profile was obtained!")
+
+    print(
+        'sigma_s = {:.2E}, Amax = {}, f_heating = {}, focal plane = {}, Rec = {}, T_LB_mean = {:.1f}, alpha_r_A = {:.2e}, alpha_r_B = {:.2e}.'.format(
+            light_source_property['sigma_s'], light_source_property['Amax'], f_heating,
+            vacuum_chamber_setting['focal_shift'],
+            sample_information['rec_name'], T_LB_mean_C,alpha_r_A,alpha_r_B))
+
+
+    return T[:time_index,:], time_simulation[:time_index], r, N_one_cycle, q_solar[:time_index,:]
+
+
+def finite_difference_2D_implicit_variable_properties(sample_information, vacuum_chamber_setting,
+                                                          solar_simulator_settings,
+                                                          light_source_property, numerical_simulation_setting,
+                                                          df_solar_simulator_VQ,
+                                                          sigma_df, code_directory, df_view_factor, df_LB_details_all):
+
+    Max_iter = 100000
+
+    T_LBW = float(df_view_factor['T_LBW_C'][0]) + 273.15
+
+    R = sample_information['R']  # sample radius
+    Nr = int(numerical_simulation_setting['Nr_node'])  # number of discretization along radial direction
+    Nz = int(numerical_simulation_setting['Nz_node']) # number of discretization along radial direction
+
+    t_z = sample_information['t_z']  # sample thickness
+
+    dr = R / (Nr - 1)
+    dz = t_z/(Nz-1)
+
+    r = np.arange(Nr)
+    rm = r * dr
+
+    rho = sample_information['rho']
+    cp_0 = sample_information['cp_const']  # Cp = cp_const + cp_c1*T + cp_c2/T + cp_c3/T**2, T unit in K
+    cp_1 = sample_information['cp_c1']
+    cp_2 = sample_information['cp_c2']
+    cp_3 = sample_information['cp_c3']
+
+    R0 = vacuum_chamber_setting['R0_node']
+
+    alpha_r_A = float(sample_information['alpha_r_A'])
+    alpha_r_B = float(sample_information['alpha_r_B'])
+
+    T_initial = sample_information['T_initial']  # unit in K
+    # k = alpha*rho*cp
+
+    f_heating = solar_simulator_settings['f_heating']  # periodic heating frequency
+    N_cycle = numerical_simulation_setting['N_cycle']
+    N_stable_cycle_output = numerical_simulation_setting['N_stable_cycle_output']
+
+    simulated_amp_phase_extraction_method = numerical_simulation_setting['simulated_amp_phase_extraction_method']
+
+    emissivity_front = sample_information['emissivity_front']  # assumed to be constant
+    emissivity_back = sample_information['emissivity_back']  # assumed to be constant
+
+    absorptivity_solar = sample_information['absorptivity_solar']
+
+    absorptivity_front = sample_information['absorptivity_front']  # assumed to be constant
+    absorptivity_back = sample_information['absorptivity_back']  # assumed to be constant
+
+    sigma_sb = 5.6703744 * 10 ** (-8)  # stefan-Boltzmann constant
+
+    Cm_LB, qm_LB, Cm_back, T_LB_mean_C = radiation_absorption_view_factor_calculations_network(code_directory, rm, dr,
+                                                                                   sample_information,
+                                                                                   solar_simulator_settings,
+                                                                                   vacuum_chamber_setting,
+                                                                                   numerical_simulation_setting,
+                                                                                   df_view_factor, df_LB_details_all)
+
+
+    dt = 1 / f_heating / numerical_simulation_setting['simulated_num_data_per_cycle']
+
+    t_total = 1 / f_heating * N_cycle  # total simulation time
+
+    Nt = int(t_total / dt)  # total number of simulation time step
+    time_simulation = dt * np.arange(Nt)
+
+    T = T_initial * np.ones((Nt, Nr*Nz))
+
+    q_solar = absorptivity_solar*light_source_intensity_Amax_fV_vecterize(np.arange(Nr) * dr, np.arange(Nt) * dt,
+                                                       solar_simulator_settings, vacuum_chamber_setting,
+                                                       light_source_property,
+                                                       df_solar_simulator_VQ, sigma_df)
+
+    #r_lb_window,lb_window = pd.read_csv('LB_window_function.csv')
+    #f_lb_window = interp1d(r_lb_window,lb_window)
+    #lb_window_function = f_lb_window(np.arange(Nr))
+    #q_solar = q_solar*lb_window_function
+
+    T_temp = np.zeros(Nr)
+    N_steady_count = 0
+    time_index = Nt - 1
+    N_one_cycle = int(Nt / N_cycle)
+
+    C_surr = qm_LB + Cm_back
+
+    Jac = np.zeros((Nr*Nz, Nr*Nz))
+    F_matrix = np.zeros(Nr*Nz)
+
+    for p in tqdm(range(Nt - 1)):  # p indicate time step
+
+        c_p_1 = cp_0 + cp_1 * T[p, :] + cp_2 / T[p, :] + cp_3 / T[p, :] ** 2
+        alpha_p_1 = 1 / (alpha_r_A * T[p, :] + alpha_r_B)
+        k_p_1 = c_p_1 * alpha_p_1 * rho
+
+        for iter in range(Max_iter):
+            # print(c_p_1)
+
+            # top left corner -- consistent with derivation, checked non-vectorized code
+            A0_0 = dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0]) - dt/(2*dr*dr*rho*c_p_1[0])*k_p_1[0]
+            B0_0 = -(dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[1]+2*k_p_1[0]+k_p_1[0])+dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+2*k_p_1[0]+k_p_1[Nr])+1)
+            C0_0 = dt*k_p_1[0]/(2*dr*dr*rho*c_p_1[0]) + dt/(2*dr**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0])
+            D0_0 = dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[0])
+            E0_0 = dt/(2*dz**2*rho*c_p_1[0])*(k_p_1[0]+k_p_1[Nr])
+
+            Jac[0,0] = B0_0 - 8*dz*Cm_LB[0]*sigma_sb*D0_0/(k_p_1[0]*2*np.pi*dr*dr)*T[p+1,0]**3
+            Jac[0,1] = A0_0 + C0_0
+            Jac[0,Nr] = D0_0 + E0_0
+
+            F_matrix[0] = T[p,0] + (A0_0+C0_0)*T[p+1,1] + B0_0*T[p+1,0] - 2*dz*Cm_LB[0]*sigma_sb*D0_0/(k_p_1[0]*2*np.pi*dr*dr)*T[p+1,0]**4 + (D0_0+E0_0)*T[p+1,Nr] +\
+                          (2*dz/(k_p_1[0]*2*np.pi*dr*dr)*qm_LB[0] + 2*dz*q_solar[p,0]/k_p_1[0])*D0_0
+
+            #top middle region -- consistent with derivation
+            Am_0 = dt/(2*dr**2*rho*c_p_1[1:Nr-1])*(k_p_1[0:Nr-2]+k_p_1[1:Nr-1]) - dt/(2*rm[1:Nr-1]*dr*rho*c_p_1[1:Nr-1])*k_p_1[1:Nr-1]
+            T_p_ghost = T[p+1,1+Nr:Nr+Nr-1] - 2*dz*Cm_LB[1:Nr-1]*sigma_sb/(k_p_1[1:Nr-1]*2*np.pi*rm[1:Nr-1]*dr)*T[p+1,1:Nr-1]**4 + 2*dz/(k_p_1[1:Nr-1]*2*np.pi*rm[1:Nr-1]*dr)*qm_LB[1:Nr-1] + 2*dz/k_p_1[1:Nr-1]*q_solar[p,1:Nr-1]
+            k_p_1_ghost = rho*(cp_0 + cp_1 * T_p_ghost + cp_2 / T_p_ghost + cp_3 / T_p_ghost ** 2)*(1 / (alpha_r_A * T_p_ghost + alpha_r_B))
+            Bm_0 = -(dt/(2*dr**2*rho*c_p_1[1:Nr-1])*(k_p_1[1+1:Nr-1+1]+2*k_p_1[1:Nr-1]+k_p_1[1-1:Nr-1-1])+dt/(2*dz**2*rho*c_p_1[1:Nr-1])*(k_p_1_ghost+2*k_p_1[1:Nr-1]+k_p_1[1+Nr:Nr-1+Nr])+1)
+
+            Cm_0 = dt * k_p_1[1:Nr-1] / (2 * rm[1:Nr-1] * dr * rho * c_p_1[1:Nr-1]) + dt / (2 * dr ** 2 * rho * c_p_1[1:Nr-1]) * (k_p_1[1-1:Nr-1-1] + k_p_1[1:Nr-1])
+
+            Dm_0 = dt / (2 * dz ** 2 * rho * c_p_1[1:Nr-1]) * (k_p_1_ghost + k_p_1[1:Nr-1])
+            Em_0 = dt/(2*dz**2*rho*c_p_1[1:Nr-1])*(k_p_1[1:Nr-1]+k_p_1[1+Nr:Nr-1+Nr])
+
+            for m in np.arange(1,Nr-1,1):
+                Jac[m, m - 1] = Am_0[m-1]
+                Jac[m, m] = Bm_0[m-1] - 8 * dz * Cm_LB[m] * sigma_sb / (k_p_1[m] * 2 * np.pi * rm[m] * dr) * Dm_0[m-1] * T[p + 1, m] ** 3
+                Jac[m, m + 1] = Cm_0[m-1]
+                Jac[m, Nr + m] = Dm_0[m-1]+ Em_0[m-1]
+
+
+            F_matrix[1:Nr-1] = T[p,1:Nr-1] + T[p+1,1-1:Nr-1-1]*Am_0 + T[p+1,1:Nr-1]*Bm_0 - 2*dz*Cm_LB[1:Nr-1]*sigma_sb/(k_p_1[1:Nr-1]*2*np.pi*rm[1:Nr-1]*dr)*Dm_0*T[p+1,1:Nr-1]**4 + \
+                              Cm_0*T[p+1,1+1:Nr-1+1]+ T[p+1,1+Nr:Nr-1+Nr]*(Dm_0+Em_0) + (2*dz/(k_p_1[1:Nr-1]*2*np.pi*rm[1:Nr-1]*dr)*qm_LB[1:Nr-1] + 2*dz/(k_p_1[1:Nr-1])*q_solar[p,1:Nr-1])*Dm_0
+
+
+            #top right corner --consistent with derivation
+            AM_0 = dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1-1]+k_p_1[Nr-1]) - dt/(2*dr*dr*rho*c_p_1[Nr-1])*k_p_1[Nr-1]
+            BM_0 = -(dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+2*k_p_1[Nr-1]+k_p_1[Nr-1-1])+dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1+Nr]+2*k_p_1[Nr-1]+k_p_1[Nr-1])+1)
+            CM_0 = dt*k_p_1[Nr-1]/(2*rm[Nr-1]*dr*rho*c_p_1[Nr-1]) + dt/(2*dr**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1-1]+k_p_1[Nr-1])
+            DM_0 = dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+k_p_1[Nr-1])
+            EM_0 = dt/(2*dz**2*rho*c_p_1[Nr-1])*(k_p_1[Nr-1]+k_p_1[Nr-1+Nr])
+
+            Jac[Nr-1,Nr-1-1] = AM_0 + CM_0
+            Jac[Nr-1,Nr-1] = BM_0 - 8*dz*Cm_LB[Nr-1]*sigma_sb*DM_0/(k_p_1[Nr-1]*2*np.pi*rm[Nr-1]*dr)*T[p+1,Nr-1]**3 - 8*dr*sigma_sb*emissivity_front/k_p_1[Nr-1]*CM_0*T[p+1,Nr-1]**3
+            Jac[Nr-1,2*Nr-1] = DM_0 + EM_0
+
+            F_matrix[Nr-1] = T[p,Nr-1] + T[p+1,Nr-1-1]*(AM_0 + CM_0) + T[p+1,Nr-1]*BM_0 - 2*dr*sigma_sb*emissivity_front/k_p_1[Nr-1]*CM_0*T[p+1,Nr-1]**4 -2*dz*Cm_LB[Nr-1]*sigma_sb/(
+                    k_p_1[Nr-1]*rm[Nr-1]*dr*2*np.pi)*DM_0*T[p+1,Nr-1]**4 + T[p+1,2*Nr-1]*(EM_0+DM_0) + 2*dz/(k_p_1[Nr-1]*rm[Nr-1]*dr*2*np.pi)*qm_LB[Nr-1] + 2*dz/k_p_1[Nr-1]*q_solar[p,Nr-1]
+
+            #left center edge--consistent with derivation
+            for n in np.arange(1,Nz-1,1):
+                A0_n = dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*n]) - dt/(2*dr*dr*rho*c_p_1[Nr*n])*k_p_1[Nr*n]
+                B0_n = -(dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n+1]+2*k_p_1[Nr*n]+k_p_1[Nr*n])+dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*(n-1)]+2*k_p_1[Nr*n]+k_p_1[Nr*(n+1)])+1)
+                C0_n = dt*k_p_1[Nr*n]/(2*dr*dr*rho*c_p_1[Nr*n]) + dt/(2*dr**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*n])
+                D0_n = dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*(n-1)]+k_p_1[Nr*n])
+                E0_n = dt/(2*dz**2*rho*c_p_1[Nr*n])*(k_p_1[Nr*n]+k_p_1[Nr*(n+1)])
+
+                Jac[Nr*n,Nr*n] = B0_n
+                Jac[Nr*n,Nr*n+1] = A0_n + C0_n
+                Jac[Nr*n,Nr*(n-1)] = D0_n
+                Jac[Nr*n,Nr*(n+1)] = E0_n
+
+                F_matrix[Nr*n] = T[p,Nr*n] + T[p+1,Nr*n]*B0_n + T[p+1,Nr*n+1]*(C0_n+A0_n) + T[p+1,Nr*(n-1)]*D0_n + T[p+1,Nr*(n+1)]*E0_n
+
+            #considering the body area -- consistent with derivation
+            for n in np.arange(1,Nz-1,1): # row, indicating n in thickness direction
+                Am_n = dt / (2 * dr ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (k_p_1[1-1 + Nr * n:Nr-1 -1+ Nr * n] + k_p_1[1 + Nr * n:Nr-1 + Nr * n]) - dt / (
+                                2 * rm[1:Nr-1] * dr * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * k_p_1[1 + Nr * n:Nr-1 + Nr * n]
+
+                Bm_n = -(dt / (2 * dr ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (
+                                k_p_1[2 + Nr * n:Nr + Nr * n] + 2 * k_p_1[1 + Nr * n:Nr-1 + Nr * n] + k_p_1[Nr * n:Nr-2 + Nr * n]) + dt / (
+                                         2 * dz ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (
+                                         k_p_1[1+Nr * (n+1):Nr-1+Nr * (n+1)] + 2 * k_p_1[1 + Nr * n:Nr-1 + Nr * n] + k_p_1[1+Nr * (n-1):Nr-1+Nr * (n-1)]) + 1)
+
+                Cm_n = dt * k_p_1[1 + Nr * n:Nr-1 + Nr * n] / (2 * rm[1:Nr-1] * dr * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) + dt / (
+                                2 * dr ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (k_p_1[Nr * n:Nr-2 + Nr * n] + k_p_1[1 + Nr * n:Nr-1 + Nr * n])
+                Dm_n = dt / (2 * dz ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (k_p_1[1+Nr * (n-1):Nr-1+Nr * (n-1)] + k_p_1[1 + Nr * n:Nr-1 + Nr * n])
+                Em_n = dt / (2 * dz ** 2 * rho * c_p_1[1 + Nr * n:Nr-1 + Nr * n]) * (k_p_1[1 + Nr * n:Nr-1 + Nr * n] + k_p_1[1+Nr * (n+1):Nr-1+Nr * (n+1)])
+
+                for m in np.arange(1,Nr-1,1):
+                    Jac[Nr * n+m, Nr * n+m-1] = Am_n[m-1]
+                    Jac[Nr * n+m, Nr * n+m] = Bm_n[m-1]
+                    Jac[Nr * n+m, Nr * n+m+1] = Cm_n[m-1]
+                    Jac[Nr * n+m, Nr * (n-1)+m] = Dm_n[m-1]
+                    Jac[Nr * n + m, Nr * (n + 1) + m] = Em_n[m-1]
+
+                F_matrix[1+Nr * n:Nr-1+Nr * n] = T[p,1+Nr * n:Nr-1+Nr * n] + T[p+1,Nr * n:Nr-2+Nr * n]*Am_n + T[p+1,1+Nr * n:Nr-1+Nr * n]*Bm_n + \
+                                                 T[p+1,2+Nr * n:Nr+Nr * n]*Cm_n + T[p+1,1+Nr * (n-1):Nr-1+Nr * (n-1)]*Dm_n + T[p+1,1+Nr * (n+1):Nr-1+Nr * (n+1)]*Em_n
+
+            #right edge--consistent with derivation
+            for n in np.arange(1,Nz-1,1):
+                AM_n = dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * n+Nr-1-1] + k_p_1[Nr * n+Nr-1]) - dt / (
+                                2 * rm[Nr-1] * dr * rho * c_p_1[Nr * n+Nr-1]) * k_p_1[Nr * n+Nr-1]
+                BM_n = -(dt / (2 * dr ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (
+                                k_p_1[Nr * n+Nr-1] + 2 * k_p_1[Nr * n+Nr-1] + k_p_1[Nr * n+Nr-1-1]) + dt / (
+                                         2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * (n-1)+Nr-1] + 2 * k_p_1[Nr * n+Nr-1] + k_p_1[Nr * (n+1)+Nr-1]) + 1)
+                CM_n = dt * k_p_1[Nr * n + Nr-1] / (2 * rm[Nr-1] * dr * rho * c_p_1[Nr * n + Nr-1]) + dt / (
+                        2 * dr ** 2 * rho * c_p_1[Nr * n + Nr-1]) * (k_p_1[Nr * n + Nr-1 - 1] + k_p_1[Nr * n + Nr-1])
+                DM_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * (n-1)+Nr-1] + k_p_1[Nr * n+Nr-1])
+                EM_n = dt / (2 * dz ** 2 * rho * c_p_1[Nr * n+Nr-1]) * (k_p_1[Nr * n+Nr-1] + k_p_1[Nr * (n+1)+Nr-1])
+
+                Jac[Nr * n+Nr-1,Nr * n+Nr-1-1] = AM_n + CM_n
+                Jac[Nr * n+Nr-1,Nr * n+Nr-1] = BM_n - 8*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T[p+1,Nr * n+Nr-1]**3
+                Jac[Nr * n+Nr-1,Nr * (n-1)+Nr-1] = DM_n
+                Jac[Nr * n+Nr-1,Nr * (n+1)+Nr-1] = Em_n
+
+                F_matrix[Nr * n+Nr-1] = T[p,Nr * n+Nr-1] + T[p+1,Nr * n+Nr-1-1]*(AM_n+CM_n) + T[p+1,Nr * n+Nr-1]*BM_n - 2*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T[p+1,Nr * n+Nr-1]**4 + \
+                    T[p+1,Nr * (n-1)+Nr-1]*DM_n + T[p+1,Nr * (n+1)+Nr-1]*EM_n + 2*sigma_sb*dr*emissivity_front*CM_n/k_p_1[Nr * n+Nr-1]*T_LBW**4
+
+
+            #bottom left corner-consistent with derivation
+            A0_N = dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)]) - dt/(2*dr*dr*rho*c_p_1[Nr*(Nz-1)])*k_p_1[Nr*(Nz-1)]
+            B0_N = -(dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)+1]+2*k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)])+dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+2*k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1-1)])+1)
+            C0_N = dt*k_p_1[Nr*(Nz-1)]/(2*dr*dr*rho*c_p_1[Nr*(Nz-1)]) + dt/(2*dr**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)-1]+k_p_1[Nr*(Nz-1)])
+            D0_N = dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1-1)]+k_p_1[Nr*(Nz-1)])
+            E0_N = dt/(2*dz**2*rho*c_p_1[Nr*(Nz-1)])*(k_p_1[Nr*(Nz-1)]+k_p_1[Nr*(Nz-1)])
+
+            Jac[Nr*(Nz-1),Nr*(Nz-1)] = B0_N - 8*dz*sigma_sb*emissivity_back*E0_N/k_p_1[Nr*(Nz-1)]*T[p+1,Nr*(Nz-1)]**3
+            Jac[Nr*(Nz-1),Nr*(Nz-1)+1] = A0_N + C0_N
+            Jac[Nr*(Nz-1),Nr*(Nz-1-1)] = D0_N + E0_N
+
+            F_matrix[Nr*(Nz-1)] = T[p,Nr*(Nz-1)] + T[p+1,Nr*(Nz-1)+1]*A0_N + T[p+1,Nr*(Nz-1)]*B0_N -2*dz*sigma_sb*emissivity_back*E0_N/k_p_1[Nr*(Nz-1)]*T[p+1,Nr*(Nz-1)]**4 + \
+                T[p+1,Nr*(Nz-1)+1]*C0_N + T[p+1,Nr*(Nz-1-1)]*(D0_N + E0_N) + 2*dz*Cm_back[0]*E0_N/(k_p_1[Nr*(Nz-1)]*dr*dr*np.pi*2)
+
+            #bottom center region - consistent with derivation
+            #for i in np.arange(1,Nr-1,1):
+            Am_N = dt/(2*dr**2*rho*c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*(k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]+k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]) - dt/(2*rm[1:Nr-1]*dr*rho*c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]
+
+            T_p_ghost = T[p+1,1+(Nz-1-1)*Nr:Nr-1+(Nz-1-1)*Nr] - 2*dz*emissivity_back*sigma_sb/k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]*T[p+1,1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]**4 + 2*dz/(rm[1:Nr]*dr*np.pi*2*k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*Cm_back[1:Nr]
+            k_p_1_ghost = rho*(cp_0 + cp_1 * T_p_ghost + cp_2 / T_p_ghost + cp_3 / T_p_ghost ** 2)*(1 / (alpha_r_A * T_p_ghost + alpha_r_B))
+
+            Bm_N = -(dt/(2*dr**2*rho*c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*(k_p_1[2+(Nz-1)*Nr:Nr+(Nz-1)*Nr]+2*k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]+k_p_1[(Nz-1)*Nr:Nr-2+(Nz-1)*Nr])+dt/(2*dz**2*rho*c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*(k_p_1_ghost+2*k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]+k_p_1[1+(Nz-1-1)*Nr:Nr-1+(Nz-1-1)*Nr])+1)
+            Cm_N = dt * k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr] / (2 * rm[1:Nr-1] * dr * rho * c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]) + dt / (2 * dr ** 2 * rho * c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]) * (k_p_1[(Nz-1)*Nr:Nr-2+(Nz-1)*Nr] + k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])
+            Dm_N = dt / (2 * dz ** 2 * rho * c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]) * (k_p_1[1+(Nz-1-1)*Nr:Nr-1+(Nz-1-1)*Nr] + k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])
+            Em_N = dt/(2*dz**2*rho*c_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr])*(k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]+k_p_1_ghost)
+
+            for m in np.arange(1,Nr-1,1):
+                Jac[m + (Nz-1)*Nr, m + (Nz-1)*Nr-1] = Am_N[m-1]
+                Jac[m + (Nz-1)*Nr, m + (Nz-1)*Nr] = Bm_N[m-1] - 8*dz*sigma_sb*emissivity_back*Em_N[m-1]/k_p_1[m + (Nz-1)*Nr]*T[p+1,m + (Nz-1)*Nr]**3
+                Jac[m + (Nz-1)*Nr, m + (Nz-1)*Nr+1] = Cm_N[m-1]
+                Jac[m + (Nz-1)*Nr, m + (Nz-1-1)*Nr] = Dm_N[m-1] + Em_N[m-1]
+
+            F_matrix[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr] = T[p,1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr] + T[p+1,(Nz-1)*Nr:Nr-2+(Nz-1)*Nr]*Am_N + T[p+1,1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]*Bm_N - 2*dz*emissivity_back*sigma_sb/k_p_1[1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]*Em_N*T[p+1,1+(Nz-1)*Nr:Nr-1+(Nz-1)*Nr]**4 + T[p+1, 2+(Nz-1)*Nr:Nr+(Nz-1)*Nr]*Cm_N +\
+                    T[p+1,1+(Nz-1-1)*Nr:Nr-1+(Nz-1-1)*Nr]*(Dm_N + Em_N) + 2*dz*Cm_back[1:Nr-1]*Em_N/(rm[1:Nr-1]*dr*2*np.pi*k_p_1[1+(Nz-1-1)*Nr:Nr-1+(Nz-1-1)*Nr])
+
+            #bottom right corner
+            AM_N = dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1-1]+k_p_1[Nr*Nz-1]) - dt/(2*rm[Nr-1]*dr*rho*c_p_1[Nr*Nz-1])*k_p_1[Nr*Nz-1]
+            BM_N = -(dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+2*k_p_1[Nr*Nz-1]+k_p_1[Nr*Nz-1-1])+dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+2*k_p_1[Nr*Nz-1]+k_p_1[Nr*(Nz-1)-1])+1)
+            CM_N = dt*k_p_1[Nr*Nz-1]/(2*rm[Nr-1]*dr*rho*c_p_1[Nr*Nz-1]) + dt/(2*dr**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1-1]+k_p_1[Nr*Nz-1])
+            DM_N = dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*(Nz-1)-1]+k_p_1[Nr*Nz-1])
+            EM_N = dt/(2*dz**2*rho*c_p_1[Nr*Nz-1])*(k_p_1[Nr*Nz-1]+k_p_1[Nr*Nz-1])
+
+            Jac[Nr*Nz-1,Nr*Nz-1-1] = AM_N + CM_N
+            Jac[Nr*Nz-1,Nr*Nz-1] = BM_N - 8*dr*emissivity_back*sigma_sb*CM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**3 -8*dz*emissivity_back*sigma_sb*EM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**3
+            Jac[Nr*Nz-1,Nr*(Nz-1)-1] = DM_N + EM_N
+
+            F_matrix[Nr*Nz-1] = T[p,Nr*Nz-1] + T[p+1,Nr*Nz-1-1]*(AM_N+CM_N) + T[p+1,Nr*Nz-1]*BM_N - 2*dr*emissivity_back*sigma_sb*CM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**4 -2*dz*emissivity_back*sigma_sb*EM_N/k_p_1[Nr*Nz-1]*T[p+1,Nr*Nz-1]**4 +\
+                T[p+1,Nr*(Nz-1)-1]*(DM_N + EM_N) + 2*Cm_back[Nr-1]*dz/(rm[Nr-1]*2*np.pi*dr*k_p_1[Nr*Nz-1])*EM_N
+
+            # T[p+1,-2] = -(AN+CN)/BN*T[p+1,-3]-(DN - 2*CN*dr*sigma_sb*emissivity_back/k_p_1[-2])/BN*T[p+1,-2]**4 - EN/BN - FN/BN - 2*dr*sigma_sb*absorptivity_back*T_LBW**4*CN/BN/k_p_1[-2] + 1/BN*T[p,-2]
+
+            # delta_T = -np.dot(inv(Jac),F_matrix)
+
+            # if p==0:
+            #     df_Jac = pd.DataFrame(data = Jac)
+            #     df_Jac.to_csv('Jacobian_diagnostic.csv')
+            delta_T = np.linalg.solve(Jac, -F_matrix)
+            T[p + 1, :] = T[p + 1, :] + delta_T
+
+            # T[p + 1, :-1] = T[p + 1, :-1] + delta_T
+            # T[p + 1, -1] = 2 * dr * sigma_sb / k_p_1[-2] * (
+            #             absorptivity_back * T_LBW ** 4 - emissivity_back * T[p + 1, -2] ** 4) + T[p + 1, -3]
+
+            err = np.max(abs(delta_T))
+
+            if err < 1e-11:
+                # if p == 10:
+                #     print("stable time reach at iter = {:.0f}, with error = {:.2E} and first node temperature = {:.1E}".format(iter, err, T[p + 1, 0]))
+                break
+            if iter == Max_iter - 1:
+                print('Convergence has not yet achieved! Increase iterations! Tempearture = {:.1E}'.format(T[p + 1, 1]))
+
+        if (p > 0) & (p % N_one_cycle == 0) & (simulated_amp_phase_extraction_method != 'fft'):
+            A_max = np.max(T[p - N_one_cycle:p, (Nz-1)*Nr:], axis=0)
+            A_min = np.min(T[p - N_one_cycle:p, (Nz-1)*Nr:], axis=0)
+            if np.max(np.abs((T_temp[:] - T[p+1, (Nz-1)*Nr:]) / (A_max - A_min))) < 1e-3:
+                N_steady_count += 1
+                if N_steady_count == N_stable_cycle_output:  # only need 2 periods to calculate amplitude and phase
+                    time_index = p
+                    print("stable temperature profile has been obtained @ iteration N= {}!".format(
+                        int(p / N_one_cycle)))
+                    break
+
+            T_temp[:] = T[p+1, (Nz-1)*Nr:]
+
+        if (p == Nt - 2) and (N_steady_count < N_stable_cycle_output):
+            time_index = p
+            print("Error! No stable temperature profile was obtained!")
+
+    print(
+        'sigma_s = {:.2E}, Amax = {}, f_heating = {}, focal plane = {}, Rec = {}, T_LB_mean = {:.1f}, alpha_r_A = {:.2e}, alpha_r_B = {:.2e}.'.format(
+            light_source_property['sigma_s'], light_source_property['Amax'], f_heating,
+            vacuum_chamber_setting['focal_shift'],
+            sample_information['rec_name'], T_LB_mean_C,alpha_r_A,alpha_r_B))
+
+
+    return T[:time_index,:], time_simulation[:time_index], r, N_one_cycle, q_solar[:time_index,:]
 
 
 def simulation_result_amplitude_phase_extraction(sample_information,
@@ -3349,7 +3955,7 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
                           'emissivity_back': emissivity_back,
                           'absorptivity_back': absorptivity_back,
                           'absorptivity_solar': absorptivity_solar,
-                          'sample_name':sample_name,'rec_name': rec_name}
+                          'sample_name':sample_name,'rec_name': rec_name,'T_bias':0}
 
     # sample_information
     # Note that T_sur1 is read in degree C, must be converted to K.
@@ -3377,20 +3983,19 @@ def high_T_Angstrom_execute_one_case_mcmc_train_surrogate(df_exp_condition, code
                                 'V_amplitude': float(df_exp_condition['V_amplitude']),
                                 'V_DC': VDC}
 
-    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
-                    'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
-                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],
-                    'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
+    mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],
+                    'step_size':mcmc_other_setting['step_size'],'p_initial':mcmc_other_setting['p_initial'],'N_total_mcmc_samples':mcmc_other_setting['N_total_mcmc_samples'],'PC_order':mcmc_other_setting['PC_order'],'PC_training_core_num':mcmc_other_setting['PC_training_core_num'],
+                    'T_regularization':mcmc_other_setting['T_regularization'],'chain_num':mcmc_other_setting['chain_num']}
 
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     if (os.path.isfile(dump_file_path_surrogate)):  # First check if a dump file exist:
         print('Found previous dump file :' + dump_file_path_surrogate)
@@ -4155,13 +4760,13 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
         'T_regularization': mcmc_other_setting['T_regularization'], 'chain_num': mcmc_other_setting['chain_num']}
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
@@ -4283,14 +4888,14 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     #df_amplitude_phase_measurement, df_temperature
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     if (os.path.isfile(dump_file_path_mcmc_results)):  # First check if a dump file exist:
         print('Found previous dump file for mcmc results:' + dump_file_path_mcmc_results)
@@ -4588,17 +5193,17 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     mcmc_mode = df_exp_condition['analysis_mode']
 
-
+    f_heating = float(df_exp_condition['f_heating'])
 
     dump_file_path_mcmc_results = code_directory + "mcmc_results_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P4D{:}_T{:}{:}'.format(
+        'rec_name'] + '_R0{:}{:}{:}_{:}{:}{:}{:}{:}{:}{:}_Tr{:}_{:}{:}_{:}c{:}_{:}{:}{:}{:}{:}{:}{:}_P3{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         N_Rs,int(mcmc_setting['N_total_mcmc_samples']),int(mcmc_setting['T_regularization']*1000),
         x0,y0,mcmc_mode,mcmc_setting['chain_num'],LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     accepted_samples_array = pickle.load(open(dump_file_path_mcmc_results, 'rb'))
     if mcmc_mode == 'RW_Metropolis':
@@ -4608,28 +5213,31 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     accepted_samples_trim = accepted_samples_array[n_burn:]
 
+    label_font_size = 12
+
     #f, axes = plt.subplots(4, 3, figsize=(26, 24))
-    f, axes = plt.subplots(4, 3, figsize=(26, 24))
+    f, axes = plt.subplots(4, 3, figsize=(26, 30))
     axes[0, 0].hist(accepted_samples_trim.T[0], bins=30)
-    axes[0, 0].set_xlabel('sigma_s', fontsize=14)
+    axes[0, 0].set_xlabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size,fontweight = 'bold')
+
 
     axes[0, 1].hist(accepted_samples_trim.T[1], bins=30)
-    axes[0, 1].set_xlabel('alpha_A', fontsize=14)
+    axes[0, 1].set_xlabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size,fontweight = 'bold')
 
     axes[0, 2].hist(accepted_samples_trim.T[2], bins=30)
-    axes[0, 2].set_xlabel('alpha_B', fontsize=14)
+    axes[0, 2].set_xlabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size,fontweight = 'bold')
 
     axes[1, 0].plot(accepted_samples_trim[:, 0])
-    axes[1, 0].set_ylabel('sigma_s', fontsize=14)
-    axes[1, 0].set_xlabel('sample num', fontsize=14)
+    axes[1, 0].set_ylabel(r'$\sigma_{solar}$(m)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 0].set_xlabel('sample num', fontsize=14,fontweight = 'bold')
 
     axes[1, 1].plot(accepted_samples_trim[:, 1])
-    axes[1, 1].set_ylabel('alpha_A', fontsize=14)
-    axes[1, 1].set_xlabel('sample num', fontsize=14)
+    axes[1, 1].set_ylabel(r'$A_{\alpha}$ (s/m$^2$K)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 1].set_xlabel('sample num', fontsize=14,fontweight = 'bold')
 
     axes[1, 2].plot(accepted_samples_trim[:, 2])
-    axes[1, 2].set_ylabel('alpha_B', fontsize=14)
-    axes[1, 2].set_xlabel('sample num', fontsize=14)
+    axes[1, 2].set_ylabel(r'$B_{\alpha}$ (s/m$^2$)', fontsize=label_font_size,fontweight = 'bold')
+    axes[1, 2].set_xlabel('sample num', fontsize=14,fontweight = 'bold')
 
     T_array = np.linspace(df_temperature.iloc[:, R0 + R_analysis].mean(), df_temperature.iloc[:, R0].mean(), 50)
     alpha_T_array = np.zeros((len(T_array), len(accepted_samples_trim)))
@@ -4648,12 +5256,12 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     axes[2, 0].fill_between(T_array, alpha_T_array_mean - 3 * alpha_T_array_std,
                             alpha_T_array_mean + 3 * alpha_T_array_std,
                             alpha=0.2)
-    axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='mcmc mean')
-    axes[2, 0].plot(T_array, alpha_reference, color='r', label='reference')
+    axes[2, 0].plot(T_array, alpha_T_array_mean, color='k', label='Bayesian mean')
+    #axes[2, 0].plot(T_array, alpha_reference, color='r', label='reference')
     #axes[2, 0].set_ylim([0,2.5e-5])
-    axes[2, 0].set_xlabel('Temperature (K)')
-    axes[2, 0].set_ylabel('Thermal diffusivity (m2/s)')
-    axes[2, 0].legend()
+    axes[2, 0].set_xlabel('Temperature (K)',fontsize=label_font_size,fontweight = 'bold')
+    axes[2, 0].set_ylabel(r'Thermal diffusivity (m$^2$/s)', fontsize=label_font_size, fontweight='bold')
+    axes[2, 0].legend(prop={'weight': 'bold', 'size': 14})
     alpha_T_array_mean = alpha_T_array.mean(axis=1)
 
     def residual(params, x, data):
@@ -4676,43 +5284,54 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     sigma_s_posterior_mean = accepted_samples_trim.T[0].mean()
 
     dump_file_path_surrogate = code_directory + "surrogate_dump//" + df_exp_condition[
-        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P4D{:}_T{:}{:}'.format(
+        'rec_name'] + '_R0{:}Ra{:}gap{:}_{:}{:}{:}{:}{:}_NRs{:}ord{:}_x0{:}y0{:}{:}_{:}{:}_{:}{:}_{:}{:}_P3{:}'.format(
         int(R0), int(R_analysis), int(gap), int(emissivity_front * 100), int(emissivity_back * 100),
         int(absorptivity_front * 100), int(absorptivity_back * 100), int(absorptivity_solar * 100),
         int(N_Rs),mcmc_setting['PC_order'],x0,y0,LB_file_name,int(1000*mcmc_setting['sigma_s_prior_range'][0]),
         int(1000*mcmc_setting['sigma_s_prior_range'][1]),int(mcmc_setting['alpha_A_prior_range'][0]),
         int(mcmc_setting['alpha_A_prior_range'][1]),int(mcmc_setting['alpha_B_prior_range'][0]/100),
-        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div,int(mcmc_setting['T_bias_prior_range'][0]/10),int(mcmc_setting['T_bias_prior_range'][1]/10))
+        int(mcmc_setting['alpha_B_prior_range'][1]/100),N_div)
 
     amp_ratio_approx, phase_diff_approx, ss_temp_approx = pickle.load(open(dump_file_path_surrogate, 'rb'))
 
-    axes[2, 1].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],
-                    label='measurement')
+    axes[2, 1].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['amp_ratio'],yerr = df_amplitude_phase_measurement['dA']*3,
+                    label='measurement',capsize=5, elinewidth=2,color = 'red',fmt= 'o')
     axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                        amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean),
-                       label='simulated')
-    axes[2, 1].set_xlabel('R (node num)')
-    axes[2, 1].set_ylabel('Amplitude ratio')
-    axes[2, 1].legend()
+                       label='Bayesian fitting',color = 'black')
+    axes[2, 1].set_xlabel('R (node num)',fontsize=label_font_size,fontweight = 'bold')
+    axes[2, 1].set_ylabel('Amplitude ratio',fontsize=label_font_size,fontweight = 'bold')
+    axes[2, 1].legend(prop={'weight': 'bold', 'size': 14})
 
-    axes[2, 2].scatter(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],
-                    label='measurement')
+    axes[2, 2].errorbar(df_amplitude_phase_measurement['r_pixels'], df_amplitude_phase_measurement['phase_diff'],yerr = df_amplitude_phase_measurement['dP']*3,
+                    label='measurement',capsize=5, elinewidth=2,color = 'red',fmt= 'o')
     axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                        phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean),
-                       label='simulated')
-    axes[2, 2].set_xlabel('R (node num)')
-    axes[2, 2].set_ylabel('Phase difference')
-    axes[2, 2].legend()
+                       label='Bayesian fitting',color = 'black')
+    axes[2, 2].set_xlabel('R (node num)',fontsize=label_font_size,fontweight = 'bold')
+    axes[2, 2].set_ylabel('Phase difference',fontsize=label_font_size,fontweight = 'bold')
+    axes[2, 2].legend(prop={'weight': 'bold', 'size': 14})
 
-    axes[3, 0].plot(ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0],
-                    label='simulated R = {:}'.format(R0))
-    axes[3, 0].plot(df_temperature.iloc[:, R0], label='measured R = {:}'.format(R0))
-    axes[3, 0].plot(
-        ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0 + R_analysis],
-        label='simulated R = {:}'.format(R0 + R_analysis))
-    axes[3, 0].plot(df_temperature.iloc[:, R0 + R_analysis], label='measured R = {:}'.format(R0 + R_analysis))
-    axes[3, 0].set_ylabel('Temperature (K)')
-    axes[3, 0].legend()
+    T_ss_RO = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0]
+    time_ss_RO = np.linspace(0, 2 / f_heating, len(T_ss_RO))
+    axes[3, 0].plot(time_ss_RO, T_ss_RO, label='simulation R = {:}'.format(R0))
+
+    time_ss_measured_R0 = df_temperature.query('reltime<{:}'.format(2 / f_heating))['reltime']
+    T_ss_measured_R0 = df_temperature.iloc[:len(time_ss_measured_R0), R0]
+    axes[3, 0].plot(time_ss_measured_R0, T_ss_measured_R0, label='measurement R = {:}'.format(R0))
+
+    T_ss_RN = ss_temp_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean)[:, R0 + R_analysis]
+    time_ss_RN = np.linspace(0,2/f_heating,len(T_ss_RN))
+    axes[3, 0].plot(time_ss_RN,T_ss_RN,label='simulation R = {:}'.format(R0 + R_analysis))
+
+    time_ss_measured_RN = time_ss_measured_R0
+    T_ss_measured_RN = df_temperature.iloc[:len(time_ss_measured_RN), R0+R_analysis]
+    axes[3, 0].plot(time_ss_measured_RN, T_ss_measured_RN, label='measurement R = {:}'.format(R0+R_analysis))
+
+    axes[3, 0].set_ylabel('Temperature (K)', fontsize=label_font_size, fontweight='bold')
+    axes[3, 0].set_xlabel('Time (s)', fontsize=label_font_size, fontweight='bold')
+    axes[3, 0].legend(prop={'weight': 'bold', 'size': 14})
+
 
     def acf(x, length):
         return np.array([1] + [np.corrcoef(x[:-i], x[i:])[0, 1] for i in range(1, length)])
@@ -4727,13 +5346,22 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
 
     autocorr_trace_alpha_A = auto_correlation_function(accepted_samples_trim[:, 1], lags)
     axes[3, 1].plot(autocorr_trace_alpha_A)
-    axes[3, 1].set_xlabel('lags N', fontsize=14)
-    axes[3, 1].set_ylabel('alpha_A', fontsize=14)
+    axes[3, 1].set_xlabel('lags N', fontsize=label_font_size,fontweight = 'bold')
+    axes[3, 1].set_ylabel('alpha_A', fontsize=label_font_size,fontweight = 'bold')
 
     autocorr_trace_alpha_B = auto_correlation_function(accepted_samples_trim[:, 2], lags)
     axes[3, 2].plot(autocorr_trace_alpha_B)
-    axes[3, 2].set_xlabel('lags N', fontsize=14)
-    axes[3, 2].set_ylabel('alpha_B', fontsize=14)
+    axes[3, 2].set_xlabel('lags N', fontsize=label_font_size,fontweight = 'bold')
+    axes[3, 2].set_ylabel('alpha_B', fontsize=label_font_size,fontweight = 'bold')
+
+    for i in range(4):
+        for j in range(3):
+            for tick in axes[i, j].xaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=12)
+                tick.label.set_fontweight('bold')
+            for tick in axes[i, j].yaxis.get_major_ticks():
+                tick.label.set_fontsize(fontsize=12)
+                tick.label.set_fontweight('bold')
 
     f.suptitle("{},f_heating={:.2e}, VDC={}, R0={}, R_a={}, e_f={}, e_b={}, a_solar={}, x0={}, y0={}".format(rec_name,float(df_exp_condition['f_heating']),float(df_exp_condition['V_DC']),R0,R_analysis,int(100 * float(df_exp_condition['emissivity_front'])),
                                                                                                              int(100 * float( df_exp_condition['emissivity_back'])), int(100 * float(df_exp_condition['absorptivity_solar'])),x0, y0),y=0.91, fontsize=16)
@@ -5503,7 +6131,7 @@ def show_mcmc_results_one_case_P4_match_phase(df_exp_condition, code_directory, 
     axes[2, 1].plot(df_amplitude_phase_measurement['r_pixels'],
                     amp_ratio_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
                                      T_bias_posterior_mean),
-                    label='simulation', color='black')
+                    label='Bayesian fitting', color='black')
     axes[2, 1].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
     axes[2, 1].set_ylabel('Amplitude ratio', fontsize=label_font_size, fontweight='bold')
     # axes[2, 1].set_ylim([0,2.1e-5])
@@ -5517,7 +6145,7 @@ def show_mcmc_results_one_case_P4_match_phase(df_exp_condition, code_directory, 
     axes[2, 2].plot(df_amplitude_phase_measurement['r_pixels'],
                     phase_diff_approx(sigma_s_posterior_mean, alpha_A_posterior_mean, alpha_B_posterior_mean,
                                       T_bias_posterior_mean),
-                    label='simulation', color='black')
+                    label='Bayesian fitting', color='black')
     axes[2, 2].set_xlabel('R (node num)', fontsize=label_font_size, fontweight='bold')
     axes[2, 2].set_ylabel('Phase difference', fontsize=label_font_size, fontweight='bold')
     axes[2, 2].legend(prop={'weight': 'bold', 'size': 14})
@@ -6628,6 +7256,15 @@ def DOE_numerical_model_one_case(parameter_name_list, DOE_parameters,sample_info
             solar_simulator_settings[parameter_name] = DOE_parameter_value
         elif parameter_name in light_source_property.keys():
             light_source_property[parameter_name] = DOE_parameter_value
+            if parameter_name == 'sigma_s':
+                Amax, sigma_s, kvd, bvd = interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ,
+                                                                                  DOE_parameter_value, numerical_simulation_setting,
+                                                                                  vacuum_chamber_setting)
+                light_source_property['Amax'] = Amax
+                light_source_property['sigma_s'] = sigma_s
+                light_source_property['kvd'] = kvd
+                light_source_property['bvd'] = bvd
+
 
     df_amp_phase_simulated, df_temperature_simulation,df_light_source, df_temperature_transient = simulation_result_amplitude_phase_extraction(sample_information,
                                                                                                      vacuum_chamber_setting,
@@ -6876,31 +7513,37 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
             elif parameter_name == 'Amax':
                 legend_temp = 'Peak nominal intensity: '+ r'$A_{max}$'
             elif parameter_name == 'sigma_s':
-                legend_temp = 'Intensity distribution: '+r'$\sigma$'
+                legend_temp = 'Intensity distribution: '+r'$\sigma_{solar}$'
             elif parameter_name == 'emissivity_front':
                 legend_temp = 'Front emissivity: '+ r'$\epsilon$'
             elif parameter_name == 'absorptivity_front':
                 legend_temp = 'Front absorptivity: '+r'$\eta$'
             elif parameter_name == 'T_sur1':
-                legend_temp = 'Front temperature'
+                legend_temp = 'Front temperature: '+r'$T_0$'
 
             axes[0, i].scatter(df_main_effect['r'], df_main_effect[parameter_name], label=legend_temp)
             axes[1, i].scatter(df_main_effect_relative['r'], df_main_effect_relative[parameter_name],
                                label=legend_temp)
 
-        axes[0, i].set_xlabel('R(pixels)', fontsize=12, fontweight='bold')
-        axes[0, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+        axes[0, i].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
+        axes[0, i].set_title("heating frequency = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
         axes[0, i].set_xlim([61,73])
 
-        axes[1, i].set_xlabel('R(pixels)', fontsize=12, fontweight='bold')
-        axes[1, i].set_title("f_heating = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
+        axes[1, i].set_xlabel('R (pixels)', fontsize=12, fontweight='bold')
+        axes[1, i].set_title("heating frequency = {} Hz".format(f_heating), fontsize=12, fontweight='bold')
 
         if i == 0:
-            axes[0, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
-            axes[1, i].set_ylabel('{}'.format(y_axis_label), fontsize=12, fontweight='bold')
+            if y_axis_label =='Amplitude ratio':
+                y_axis_label_1 = 'Amplitude ratio main effect'
+                y_axis_label_2 = 'Amplitude ratio main effect percentage'
+
+            if y_axis_label =='Phase difference':
+                y_axis_label_1 = 'Phase difference main effect'
+                y_axis_label_2 = 'Phase difference main effect percentage'
+            axes[0, i].set_ylabel('{}'.format(y_axis_label_1), fontsize=12, fontweight='bold')
+            axes[1, i].set_ylabel('{}'.format(y_axis_label_2), fontsize=12, fontweight='bold')
             axes[1, i].set_xlim([61, 73])
-        axes[0, i].legend(prop={'weight': 'bold', 'size': 12})
-        axes[1, i].legend(prop={'weight': 'bold', 'size': 12})
+
 
         for tick in axes[0, i].xaxis.get_major_ticks():
             tick.label.set_fontsize(fontsize=12)
@@ -6914,6 +7557,9 @@ def main_effect_2nd_level_DOE_one_row(df_results_main_effect, y_axis_label, f_he
         for tick in axes[1, i].yaxis.get_major_ticks():
             tick.label.set_fontsize(fontsize=12)
             tick.label.set_fontweight('bold')
+
+        axes[0, 0].legend(prop={'weight': 'bold', 'size': 12})
+        axes[1, 0].legend(prop={'weight': 'bold', 'size': 12})
 
     plt.tight_layout(h_pad=1)
 
