@@ -1658,7 +1658,7 @@ def interpolate_light_source_characteristic(sigma_df, df_solar_simulator_VQ, sig
 
 
 
-def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_settings, vacuum_chamber_setting,light_source_property,
+def light_source_intensity_Amax_fV_vecterize_old(r_array, t_array, solar_simulator_settings, vacuum_chamber_setting,light_source_property,
                                              df_solar_simulator_VQ, sigma_df):
 
     focal_shift = vacuum_chamber_setting['focal_shift']
@@ -1723,6 +1723,48 @@ def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_s
     """
 
     return q
+
+
+def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_settings, vacuum_chamber_setting,light_source_property,
+                                             df_solar_simulator_VQ, sigma_df):
+
+    focal_shift = vacuum_chamber_setting['focal_shift']
+
+    Amax, sigma_s, kvd, bvd = light_source_property['Amax'], light_source_property['sigma_s'], light_source_property[
+        'kvd'], light_source_property['bvd']
+
+    f_heating = solar_simulator_settings['f_heating']
+
+    V_AC = solar_simulator_settings['V_amplitude']
+    V_DC = solar_simulator_settings['V_DC']
+
+    V_full_cycles = (V_DC + V_AC * np.sin(2 * np.pi * f_heating * t_array))
+
+    q = (kvd * V_full_cycles[:, np.newaxis] + bvd) * Amax / np.pi * sigma_s / (
+            sigma_s ** 2 + r_array[np.newaxis, :] ** 2)
+
+    #N_Rs = vacuum_chamber_setting['N_Rs_node']
+
+    R_LB = np.arange(0, 50e-3, 0.25e-3)
+    win_LB = np.ones(len(R_LB))
+    idx_winLB = int(np.where(R_LB == 8.75e-3)[0]) # This is based entirely on the LB radius== 10mm, make sure to change if different LB is used!
+    win_LB[idx_winLB] = 0.99977
+    win_LB[idx_winLB + 1] = 0.98298
+    win_LB[idx_winLB + 2] = 0.92829
+    win_LB[idx_winLB + 3] = 0.83981
+    win_LB[idx_winLB + 4] = 0.7177
+    win_LB[idx_winLB + 5] = 0.5773
+    win_LB[idx_winLB + 6] = 0.2637
+    win_LB[idx_winLB + 7] = 0.034
+    win_LB[idx_winLB + 8] = 7e-6
+    win_LB[idx_winLB + 9:] = 0
+    f_train_window = interp1d(R_LB, win_LB)
+
+    intensity_truncation = f_train_window(r_array)
+    q = q * intensity_truncation
+
+    return q
+
 
 
 def lorentzian_Amax_sigma_estimation(d,code_directory):
