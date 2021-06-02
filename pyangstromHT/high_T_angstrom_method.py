@@ -1725,6 +1725,7 @@ def light_source_intensity_Amax_fV_vecterize_old(r_array, t_array, solar_simulat
     return q
 
 
+
 def light_source_intensity_Amax_fV_vecterize(r_array, t_array, solar_simulator_settings, vacuum_chamber_setting,light_source_property,
                                              df_solar_simulator_VQ, sigma_df):
 
@@ -2274,10 +2275,6 @@ def finite_difference_2D_nonvectorized_implicit_variable_properties(sample_infor
                                                        light_source_property,
                                                        df_solar_simulator_VQ, sigma_df)
 
-    #r_lb_window,lb_window = pd.read_csv('LB_window_function.csv')
-    #f_lb_window = interp1d(r_lb_window,lb_window)
-    #lb_window_function = f_lb_window(np.arange(Nr))
-    #q_solar = q_solar*lb_window_function
 
     T_temp = np.zeros(Nr)
     N_steady_count = 0
