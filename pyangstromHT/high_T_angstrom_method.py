@@ -3371,13 +3371,6 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
 
 
 
-    # df_sample_cp_rho_alpha_all = pd.read_excel(code_directory + "sample specifications//sample properties.xlsx",
-    #                                            sheet_name="sample properties")
-
-
-    #df_solar_simulator_VQ = pd.read_csv(code_directory + "sample specifications//9_14_Amax_Fv_d_correlations.csv")
-
-    #sigma_df = pd.read_csv(code_directory + "sample specifications//Lorentzian sigma.csv")
 
     sample_name = df_exp_condition_i['sample_name']
 
