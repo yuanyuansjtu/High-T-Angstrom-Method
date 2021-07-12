@@ -3544,7 +3544,7 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
 
 
     Nr = int(df_exp_condition['Nr_pixels'])
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
     N_div = int(df_exp_condition['N_div'])
@@ -3576,7 +3576,7 @@ def high_T_Angstrom_execute_one_case_regression(df_exp_condition, data_directory
     # Note that T_sur1 is read in degree C, must be converted to K.
     # Indicate where light_blocker is used or not, option here: True, False
 
-    vacuum_chamber_setting = {'N_Rs_node': N_div*N_Rs, 'R0_node': N_div*R0, 'focal_shift':focal_shift,'R_analysis_node':N_div*R_analysis-2*N_div+2,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'R0_node': N_div*R0, 'focal_shift':focal_shift,'R_analysis_node':N_div*R_analysis-2*N_div+2,'light_blocker':df_exp_condition['light_blocker']}
     # vacuum_chamber_setting
 
     numerical_simulation_setting = {'Nr_node': N_div*Nr-N_div+1,
@@ -4407,10 +4407,10 @@ def high_T_Angstrom_execute_one_case_NUTs(df_exp_condition, data_directory, code
     #alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
     #alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
     mcmc_mode = df_exp_condition['analysis_mode']
 
-    vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
 
     mcmc_setting = {'alpha_A_prior_range':[float(df_exp_condition['alpha_A_LL']),float(df_exp_condition['alpha_A_UL'])],'alpha_B_prior_range':[float(df_exp_condition['alpha_B_LL']),float(df_exp_condition['alpha_B_UL'])],
                     'sigma_s_prior_range':[float(df_exp_condition['sigma_s_LL']),float(df_exp_condition['sigma_s_UL'])],'T_bias_prior_range':[float(df_exp_condition['T_bias_LL']),float(df_exp_condition['T_bias_UL'])],
@@ -4663,10 +4663,10 @@ def high_T_Angstrom_execute_one_case_rw_mcmc(df_exp_condition, data_directory, c
     #alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
     #alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
     N_div = int(df_exp_condition['N_div'])
 
-    vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
     mcmc_setting = {
         'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
         'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
@@ -4854,10 +4854,10 @@ def high_T_Angstrom_execute_one_case_rw_mcmc_P4(df_exp_condition, data_directory
     #alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
     #alpha_r_B_ref = float(df_sample_cp_rho_alpha['alpha_r_B'])
 
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
     N_div = int(df_exp_condition['N_div'])
 
-    vacuum_chamber_setting = {'N_Rs_pixels': N_Rs, 'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
+    vacuum_chamber_setting = {'R0_pixels': R0,'focal_shift':focal_shift,'R_analysis_pixels':R_analysis,'light_blocker':df_exp_condition['light_blocker']}
     mcmc_setting = {
         'alpha_A_prior_range': [float(df_exp_condition['alpha_A_LL']), float(df_exp_condition['alpha_A_UL'])],
         'alpha_B_prior_range': [float(df_exp_condition['alpha_B_LL']), float(df_exp_condition['alpha_B_UL'])],
@@ -5102,7 +5102,7 @@ def show_mcmc_results_one_case(df_exp_condition, code_directory, df_temperature,
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
     N_div = int(df_exp_condition['N_div'])
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
 
     alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
 
@@ -5343,7 +5343,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
     N_div = int(df_exp_condition['N_div'])
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
 
 
     alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
@@ -5896,7 +5896,7 @@ def show_mcmc_results_one_case_P4_match_phase(df_exp_condition, code_directory, 
     x0 = int(df_exp_condition['x0_pixels'])
     y0 = int(df_exp_condition['y0_pixels'])
     N_div = int(df_exp_condition['N_div'])
-    N_Rs = int(df_exp_condition['N_Rs_pixels'])
+    #N_Rs = int(df_exp_condition['N_Rs_pixels'])
 
     alpha_r_A_ref = float(df_sample_cp_rho_alpha['alpha_r_A'])
 
