@@ -500,7 +500,7 @@ def check_angular_uniformity(x0, y0, N_Rmax, pr, path, rec_name, output_name, me
 
 
 
-    df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,angle_range,pr, path,
+    df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,angle_range, path,
                                                                                                          rec_name, output_name, method, num_cores,code_directory)
 
     for j, angle in enumerate(angle_range):
@@ -1311,7 +1311,7 @@ def interpolate_LB_temperatures(actual_focal_shift,actual_VDC,df_LB_temperature_
 #
 #
 
-def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name,
+def radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax, theta_range_list, path, rec_name,
                                                           output_name, method,
                                                           num_cores,code_directory):  # unit in K
     # path= "C://Users//NTRG lab//Desktop//yuan//"
@@ -3056,8 +3056,7 @@ def result_visulization_one_case(df_exp_condition_i, code_directory, data_direct
 
     plt.subplot(331)
     df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax,
-                                                                                                         anguler_range,
-                                                                                                         pr, path,
+                                                                                                         anguler_range,path,
                                                                                                          rec_name,
                                                                                                          output_name,
                                                                                                          'MA', 4,
@@ -5394,7 +5393,7 @@ def show_mcmc_results_one_case_P4(df_exp_condition, code_directory,data_director
 
     output_name = rec_name
     path = data_directory + str(rec_name) + "//"
-    df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Nr,angle_range,pr, path,rec_name,output_name,'MA', 2, code_directory)
+    df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Nr,angle_range, path,rec_name,output_name,'MA', 2, code_directory)
 
 
 
@@ -5946,8 +5945,7 @@ def show_mcmc_results_one_case_P4_match_phase(df_exp_condition, code_directory, 
     output_name = rec_name
     path = data_directory + str(rec_name) + "//"
     df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Nr,
-                                                                                                           angle_range,
-                                                                                                           pr, path,
+                                                                                                           angle_range, path,
                                                                                                            rec_name,
                                                                                                            output_name,
                                                                                                            'MA', 2,
@@ -6401,8 +6399,7 @@ def mcmc_result_vs_reference_visualization(df_result_summary, f_heating, R0_max,
 def steady_temperature_profile_check(x0, y0, N_Rmax, theta_range_list, pr, path, rec_name, output_name,
                                      method, num_cores, code_directory, R0, R_analysis, focal_plane_relative_location):
     df_temperature_list, df_averaged_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, N_Rmax,
-                                                                                                         theta_range_list,
-                                                                                                         pr, path,
+                                                                                                         theta_range_list, path,
                                                                                                          rec_name,
                                                                                                          output_name,
                                                                                                          method,
@@ -6602,7 +6599,7 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
         y0 = int(df_exp_condition['y0_pixels'])  # in pixels
         Rmax = int(df_exp_condition['Nr_pixels'])  # in pixels
         # x0,y0,N_Rmax,pr,path,rec_name,output_name,method,num_cores
-        pr = df_exp_condition['pr']
+        #pr = df_exp_condition['pr']
         # df_temperature = radial_temperature_average_disk_sample_several_ranges(x0,y0,Rmax,[[0,np.pi/3],[2*np.pi/3,np.pi],[4*np.pi/3,5*np.pi/3],[5*np.pi/3,2*np.pi]],pr,path,rec_name,output_name,method,num_cores)
 
         # After obtaining temperature profile, next we obtain amplitude and phase
@@ -6636,7 +6633,7 @@ def parallel_temperature_average_batch_experimental_results(df_exp_condition_spr
         #
         # diagnostic_figure_list.append(diagnostic_figure)
 
-        df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, pr, path,
+        df_temperature_list_all_ranges, df_temperature = radial_temperature_average_disk_sample_several_ranges(x0, y0, Rmax, angle_range, path,
                                                                                rec_name, output_name, method, num_cores,code_directory)
 
         df_amplitude_phase_angle_range_list = []
