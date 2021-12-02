@@ -21,4 +21,5 @@ If this code keep your life great, please cite my paper so I can eat:
 
 Hu, Yuan, and Timothy S. Fisher. "Accurate Thermal Diffusivity Measurements Using a Modified Ångström's Method With Bayesian Statistics." Journal of Heat Transfer 142.7 (2020).
 
+Hu, Yuan, et al. "High-Temperature Thermal Diffusivity Measurements Using a Modified Ångström's Method with Transient Infrared Thermography." Journal of Heat Transfer (2021).
 Please also cite this code if somehow it benefits your research: https://doi.org/10.5281/zenodo.4587868
